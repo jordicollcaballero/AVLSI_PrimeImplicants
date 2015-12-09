@@ -1,0 +1,10 @@
+podria tractar els implicants com una tripleta(valor,mascara,dontcare), en que la mascara digui si quella variable es dontcare o no i aixi poder fer una bitwise operation fent servir valor mascara
+exemple:
+
+valor =  01001001011
+mascara= 11011001111
+dontcare = boolean
+
+la !xor bitwise entre mascares tb diu si fan servir les mateixes variables o no.
+
+podem mirar si un implicant conte totes les variables d'una altra si la seva mascara implica la altra

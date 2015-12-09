@@ -1,31 +1,12 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <list>
 #include <sstream>
 #include <string>
-#include <cmath>
-#include <bitset>
+#include "implicant.h"
 
 using namespace std;
-
-typedef dynamic_bitset minterm;
-
-void print(int * x, int n){
-    for(int i = 0; i < n; i++){
-        for(int j = 0; j < n; j++){
-            cout << (x[i*n+j]>0 ? "X" : ".");
-        }
-        cout << endl;
-    }
-}
-
-minterm parseMinterm(const string &word){
-    char c;
-    minterm m;
-    for(int i = 0; i < word.length(); i++){
-        m[i] = c == '0' ? 0 : 1;
-    }
-}
 
 int main (int argc, char ** argv) {
 
@@ -35,12 +16,15 @@ int main (int argc, char ** argv) {
     int nVars, nMinterms;
     string word;
 
-    input >> nVars >> nMinerms;
-    list<minterm> minterms;
+    input >> nVars >> nMinterms;
+    list<Implicant> minterms;
     while(input >> word){
-        minterms << parseMinterm(word);
+        minterms.push_back(Implicant(word));
     }
 
+    Implicant i1(string("0101"));
+    Implicant i2(string("1101"));
+    cout << Implicant::consensus(i1,i2) << endl;
 
     return 0;
 }
