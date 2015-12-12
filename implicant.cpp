@@ -2,12 +2,14 @@
 
 Implicant::Implicant()
 {
+    valid = false;
 }
 
 Implicant::Implicant(const Implicant &i)
 {
     mask = i.mask;
     variables = i.variables;
+    valid = i.valid;
 }
 
 Implicant::Implicant(const string &s)
@@ -24,9 +26,26 @@ Implicant::Implicant(const string &s)
         }
         i++;
     }
+    valid = true;
+}
+
+int Implicant::getNVars() const
+{
+    return mask.size();
+}
+
+int Implicant::countNegatedVars() const
+{
+    dynamic_bitset<> aux(mask.size());
+    aux.set();
+    return (mask & (variables^aux)).count();
 }
 
 dynamic_bitset<> Implicant::maskedVars() const{
+    return mask & variables;
+}
+
+dynamic_bitset<> Implicant::maskedVars(const dynamic_bitset<>  & mask) const{
     return mask & variables;
 }
 
@@ -41,16 +60,61 @@ ostream& operator<<(ostream& os, const Implicant& imp)
     return os;
 }
 
-Implicant Implicant::consensus(const Implicant &i1, const Implicant &i2){
-    Implicant i(i1);
-    dynamic_bitset<> uncommon_variables = i1.mask ^ i2.mask;
-    if(uncommon_variables.count()==0){
-        i.mask = i1.mask;
-        int disjoint_var = (i1.maskedVars() ^ i2.maskedVars()).find_first();
-        i.mask[disjoint_var]=false;
+bool Implicant::covers(const Implicant &i) const{
+    return this->mask.is_subset_of(i.mask) &&
+            this->maskedVars()==i.maskedVars(this->mask);
+}
+
+bool Implicant::isValid() const
+{
+    return valid;
+}
+
+Implicant Implicant::distance1Merging(const Implicant &i1, const Implicant &i2){
+    Implicant i;
+    if(i1.mask == i2.mask){
+        dynamic_bitset<> uncommonVariables = i1.maskedVars() ^ i2.maskedVars();
+        int distance = uncommonVariables.count();
+        if(distance==1){
+            i.mask = i1.mask;
+            i.variables = i1.variables;
+            i.valid = true;
+            int uncommonVar = uncommonVariables.find_first();
+            i.mask[uncommonVar]=false;
+        }
+        else
+            i.valid = false;
     }
     else
-        i.mask.reset();
+        i.valid = false;
     return i;
 }
 
+
+Implicant Implicant::consensus(const Implicant &i1, const Implicant &i2){
+    Implicant i;
+    dynamic_bitset<> commonVariables = i1.mask & i2.mask;
+    dynamic_bitset<> uncommonVariables = i1.maskedVars(commonVariables) ^ i2.maskedVars(commonVariables);
+    int distance = uncommonVariables.count();
+    if(distance==1){
+        int disjointVar = uncommonVariables.find_first();
+        i.mask = i1.mask | i2.mask;
+        i.variables = i1.maskedVars() | i2.maskedVars();
+        i.mask[disjointVar]=false;
+        i.valid = true;
+    }
+    else
+        i.valid = false;
+    return i;
+}
+
+
+Implicant Implicant::trueImplicant(int nVars)
+{
+    Implicant i;
+    i.valid = true;
+    i.mask = dynamic_bitset<>(nVars);
+    i.variables = dynamic_bitset<>(nVars);
+    i.mask.reset();
+    return i;
+}
