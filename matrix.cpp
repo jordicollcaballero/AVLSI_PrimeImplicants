@@ -20,21 +20,76 @@ Matrix::Matrix(const list<Implicant> &minterms, const list<Implicant> &implicant
     }
 }
 
-void Matrix::reduce(dynamic_bitset &x)
+void Matrix::reduce(dynamic_bitset<> &x)
 {
+    list<int> to_remove;
+    bool changes;
+
     do{
-        bool changes = false;
+        changes = false;
+
         //Essential columns
-        for(int j = nColumns-1; j >= 0; j--)
-            if(isEssential(j))
-                x.set(removeColumn(j));
+        for(int i = 0; i < nRows; i++){
+            int essential = essentialColumn(i);
+            if(essential != -1)
+                to_remove.push_back(essential);
+        }
 
+        if(!to_remove.empty()){
+            //sort to_remove decreasing
+            changes = true;
+            int lastChanged = nColumns;
+            for(int &col : to_remove){
+                if(col != lastChanged){ //may contain repetitions
+                    x.set(removeColumnAndRows(col));
+                    lastChanged = col;
+                }
+            }
+        }
 
+        //Column dominance
+        for(int i = 1; i < nColumns; i++){
+            for(int j = 0; j < i; j++){
+                if(columnDominance(i,j))
+                    to_remove.push_back(j);
+                else if(columnDominance(j,i))
+                    to_remove.push_back(i);
+            }
+        }
 
-        //Column cover
+        if(!to_remove.empty()){
+            //sort to_remove decreasing
+            changes = true;
+            int lastChanged = nColumns;
+            for(int &col : to_remove){
+                if(col != lastChanged){ //may contain repetitions
+                    removeColumn(col);
+                    lastChanged = col;
+                }
+            }
+        }
 
+        //Row dominance
+        for(int i = 1; i< nRows; i++){
+            for(int j = 0; j < i; j++){
+                if(rowDominance(i,j))
+                    to_remove.push_back(i);
+                else if(rowDominance(j,i))
+                    to_remove.push_back(j);
+            }
+        }
 
-        //Row cover
+        if(!to_remove.empty()){
+            //sort to_remove decreasing
+            changes = true;
+            int lastChanged = nRows;
+            for(int &row : to_remove){
+                if(row != lastChanged){
+                    removeRow(row);
+                    lastChanged = row;
+                }
+            }
+        }
 
     }while(changes);
 
@@ -43,6 +98,13 @@ void Matrix::reduce(dynamic_bitset &x)
 int Matrix::selectBranchingColumn()
 {
     return 0;
+}
+
+void Matrix::removeRow(int row)
+{
+    nRows--;
+    if(row < nRows)
+        matrix[row] = matrix[nRows];
 }
 
 int Matrix::removeColumn(int col)
@@ -80,6 +142,32 @@ int Matrix::removeColumnAndRows(int col)
 bool Matrix::empty()
 {
     return nRows == 0;
+}
+
+int Matrix::essentialColumn(int row){
+    int nImp = 0;
+    int selectedCol = -1;
+    for(int col = 0; nImp <= 1 && col < nColumns ; col++){
+        if(matrix[row][col]){
+            nImp++;
+            selectedCol = col;
+        }
+    }
+    return nImp == 1 ? selectedCol : -1;
+}
+
+bool Matrix::columnDominance(int i, int j){
+    for(int row = 0; row < nRows; row++)
+        if(matrix[row][j] && !matrix[row][i])
+            return false;
+    return true;
+}
+
+bool Matrix::rowDominance(int i, int j){
+    for(int col = 0; col < nColumns; col++)
+        if(matrix[col][j] && !matrix[col][i])
+            return false;
+    return true;
 }
 
 

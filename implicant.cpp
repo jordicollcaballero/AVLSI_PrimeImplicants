@@ -18,8 +18,10 @@ Implicant::Implicant(const string &s)
     variables = dynamic_bitset<>(s.size());
     int i = 0;
     for(const char& c : s) {
-        if(c=='x')
+        if(c=='x'){
             mask[i]=0;
+            variables[i]=0;
+        }
         else{
             mask[i] = 1;
             variables[i] = c=='1' ? 1 : 0;
@@ -41,10 +43,6 @@ int Implicant::countNegatedVars() const
     return (mask & (variables^aux)).count();
 }
 
-dynamic_bitset<> Implicant::maskedVars() const{
-    return mask & variables;
-}
-
 dynamic_bitset<> Implicant::maskedVars(const dynamic_bitset<>  & mask) const{
     return mask & variables;
 }
@@ -62,7 +60,7 @@ ostream& operator<<(ostream& os, const Implicant& imp)
 
 bool Implicant::covers(const Implicant &i) const{
     return this->mask.is_subset_of(i.mask) &&
-            this->maskedVars()==i.maskedVars(this->mask);
+            this->variables==i.maskedVars(this->mask);
 }
 
 bool Implicant::isValid() const
@@ -73,7 +71,7 @@ bool Implicant::isValid() const
 Implicant Implicant::distance1Merging(const Implicant &i1, const Implicant &i2){
     Implicant i;
     if(i1.mask == i2.mask){
-        dynamic_bitset<> uncommonVariables = i1.maskedVars() ^ i2.maskedVars();
+        dynamic_bitset<> uncommonVariables = i1.variables ^ i2.variables;
         int distance = uncommonVariables.count();
         if(distance==1){
             i.mask = i1.mask;
@@ -81,6 +79,7 @@ Implicant Implicant::distance1Merging(const Implicant &i1, const Implicant &i2){
             i.valid = true;
             int uncommonVar = uncommonVariables.find_first();
             i.mask[uncommonVar]=false;
+            i.variables[uncommonVar]=false;
         }
         else
             i.valid = false;
@@ -97,10 +96,11 @@ Implicant Implicant::consensus(const Implicant &i1, const Implicant &i2){
     dynamic_bitset<> uncommonVariables = i1.maskedVars(commonVariables) ^ i2.maskedVars(commonVariables);
     int distance = uncommonVariables.count();
     if(distance==1){
-        int disjointVar = uncommonVariables.find_first();
+        int uncommonVar = uncommonVariables.find_first();
         i.mask = i1.mask | i2.mask;
-        i.variables = i1.maskedVars() | i2.maskedVars();
-        i.mask[disjointVar]=false;
+        i.variables = i1.variables | i2.variables;
+        i.mask[uncommonVar]=false;
+        i.variables[uncommonVar]=false;
         i.valid = true;
     }
     else
@@ -116,11 +116,12 @@ Implicant Implicant::trueImplicant(int nVars)
     i.mask = dynamic_bitset<>(nVars);
     i.variables = dynamic_bitset<>(nVars);
     i.mask.reset();
+    i.variables.reset();
     return i;
 }
 
 
-bool Implicant::operator<(const Implicant &lhs, const Implicant &rhs)
+bool Implicant::operator<(const Implicant &rhs)
 {
-    return lhs.maskedVars().to_ulong() < rhs.maskedVars().to_ulong();
+    return variables.to_ulong() < rhs.variables.to_ulong();
 }

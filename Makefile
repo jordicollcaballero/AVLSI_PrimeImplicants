@@ -4,7 +4,7 @@ CPPFLAGS=-g -std=c++11
 LDFLAGS=-g
 LDLIBS=-lboost_program_options 
 
-SRCS=main.cpp implicant.cpp
+SRCS=main.cpp implicant.cpp matrix.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
 
 all: run

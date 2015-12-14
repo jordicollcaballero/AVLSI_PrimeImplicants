@@ -123,10 +123,8 @@ list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
     }
 }
 
-dynamic_bitset exactCover(const Matrix &A,dynamic_bitset x, dynamic_bitset b){
+dynamic_bitset<> exactCover(Matrix &A, dynamic_bitset<> x, dynamic_bitset<> b){
     int c;
-    dynamic_bitset x2;
-    Matrix A2;
 
     A.reduce(x);
     if(x.count() >= b.count()) return b;
@@ -134,9 +132,9 @@ dynamic_bitset exactCover(const Matrix &A,dynamic_bitset x, dynamic_bitset b){
 
     c = A.selectBranchingColumn();
 
-    A2 = A;
+    Matrix A2 = A;
     x.set(A2.removeColumnAndRows(c));
-    x2 = exactCover(A2,x,b);
+    dynamic_bitset<> x2 = exactCover(A2,x,b);
     if(x2.count() < b.count()) b = x2;
 
     A2 = A;

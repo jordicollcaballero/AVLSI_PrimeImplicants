@@ -7,10 +7,10 @@ LDLIBS=-lboost_program_options
 SRCS=main.cpp implicant.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
 
-all: simulation
+all: run
 
-simulation: $(OBJS)
-	$(CXX) $(LDFLAGS) -o simulation $(OBJS) $(LDLIBS) 
+run: $(OBJS)
+	$(CXX) $(LDFLAGS) -o run $(OBJS) $(LDLIBS) 
 
 clean:
 	$(RM) $(OBJS)
