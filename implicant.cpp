@@ -118,3 +118,9 @@ Implicant Implicant::trueImplicant(int nVars)
     i.mask.reset();
     return i;
 }
+
+
+bool Implicant::operator<(const Implicant &lhs, const Implicant &rhs)
+{
+    return lhs.maskedVars().to_ulong() < rhs.maskedVars().to_ulong();
+}

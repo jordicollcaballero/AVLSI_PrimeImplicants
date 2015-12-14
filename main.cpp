@@ -5,9 +5,10 @@
 #include <sstream>
 #include <string>
 #include "implicant.h"
+#include "matrix.h"
 
 using namespace std;
-
+using namespace boost;
 
 void printTable(list<Implicant> ** table, int nVars){
     for(int col = 0; col <= nVars; col++){
@@ -120,6 +121,30 @@ list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
         }
         if(it1==it2) it1++;
     }
+}
+
+dynamic_bitset exactCover(const Matrix &A,dynamic_bitset x, dynamic_bitset b){
+    int c;
+    dynamic_bitset x2;
+    Matrix A2;
+
+    A.reduce(x);
+    if(x.count() >= b.count()) return b;
+    if(A.empty()) return x;
+
+    c = A.selectBranchingColumn();
+
+    A2 = A;
+    x.set(A2.removeColumnAndRows(c));
+    x2 = exactCover(A2,x,b);
+    if(x2.count() < b.count()) b = x2;
+
+    A2 = A;
+    x.reset(A2.removeColumn(c));
+    x2 = exactCover(A2,x,b);
+    if(x2.count() < b.count()) b = x2;
+
+    return b;
 }
 
 
