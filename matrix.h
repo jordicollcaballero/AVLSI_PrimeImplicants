@@ -1,8 +1,8 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 
-#include<list>
 #include <boost/dynamic_bitset.hpp> //sudo apt install libboost1.55-all-dev
+#include <list>
 #include "implicant.h"
 
 using namespace boost;

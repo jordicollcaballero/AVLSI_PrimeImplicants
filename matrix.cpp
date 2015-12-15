@@ -1,5 +1,9 @@
 #include "matrix.h"
 
+#include <boost/range/adaptor/reversed.hpp>
+#include <set>
+
+
 Matrix::Matrix(const list<Implicant> &minterms, const list<Implicant> &implicants)
 {
     nRows = minterms.size();
@@ -22,7 +26,7 @@ Matrix::Matrix(const list<Implicant> &minterms, const list<Implicant> &implicant
 
 void Matrix::reduce(dynamic_bitset<> &x)
 {
-    list<int> to_remove;
+    set<int> to_remove;
     bool changes;
 
     do{
@@ -32,63 +36,46 @@ void Matrix::reduce(dynamic_bitset<> &x)
         for(int i = 0; i < nRows; i++){
             int essential = essentialColumn(i);
             if(essential != -1)
-                to_remove.push_back(essential);
+                to_remove.insert(essential);
         }
 
         if(!to_remove.empty()){
-            //sort to_remove decreasing
             changes = true;
-            int lastChanged = nColumns;
-            for(int &col : to_remove){
-                if(col != lastChanged){ //may contain repetitions
-                    x.set(removeColumnAndRows(col));
-                    lastChanged = col;
-                }
-            }
+            for(const int &col : adaptors::reverse(to_remove))
+                x.set(removeColumnAndRows(col));
         }
 
         //Column dominance
         for(int i = 1; i < nColumns; i++){
             for(int j = 0; j < i; j++){
                 if(columnDominance(i,j))
-                    to_remove.push_back(j);
+                    to_remove.insert(j);
                 else if(columnDominance(j,i))
-                    to_remove.push_back(i);
+                    to_remove.insert(i);
             }
         }
 
         if(!to_remove.empty()){
-            //sort to_remove decreasing
             changes = true;
-            int lastChanged = nColumns;
-            for(int &col : to_remove){
-                if(col != lastChanged){ //may contain repetitions
-                    removeColumn(col);
-                    lastChanged = col;
-                }
-            }
+            for(const int &col : adaptors::reverse(to_remove))
+                removeColumn(col);
         }
 
         //Row dominance
         for(int i = 1; i< nRows; i++){
             for(int j = 0; j < i; j++){
                 if(rowDominance(i,j))
-                    to_remove.push_back(i);
+                    to_remove.insert(i);
                 else if(rowDominance(j,i))
-                    to_remove.push_back(j);
+                    to_remove.insert(j);
             }
         }
 
         if(!to_remove.empty()){
             //sort to_remove decreasing
             changes = true;
-            int lastChanged = nRows;
-            for(int &row : to_remove){
-                if(row != lastChanged){
-                    removeRow(row);
-                    lastChanged = row;
-                }
-            }
+            for(const int &row : adaptors::reverse(to_remove))
+                removeRow(row);
         }
 
     }while(changes);

@@ -172,7 +172,8 @@ int main (int argc, char ** argv) {
     cout << consensus << endl;
     */
 
-    tabularMethod(minterms);
+    //tabularMethod(minterms);
+
 
     return 0;
 }
