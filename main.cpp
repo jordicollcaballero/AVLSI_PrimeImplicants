@@ -13,49 +13,6 @@
 using namespace std;
 using namespace boost;
 
-//http://stackoverflow.com/questions/9330915/number-of-combinations-n-choose-r-in-c
-unsigned nChoosek(unsigned n, unsigned k )
-{
-    if (k > n) return 0;
-    if (k * 2 > n) k = n-k;
-    if (k == 0) return 1;
-
-    int result = n;
-    for(int i = 2; i <= k; ++i ) {
-        result *= (n-i+1);
-        result /= i;
-    }
-    return result;
-}
-
-double probBinomial(int n, double p, int k){
-    return nChoosek(n,k) * pow(p,k)*pow(1-p,n-k);
-}
-
-
-double probTriangular(int a, int b, int c, int k){
-    if(k < a) return 0;
-    else if(k < c) return 2*(k-a)/(double)((b-a)*(c-a));
-    else if(k==c) return 2/(double)(b-a);
-    else if(k <= b) return 2*(b-k)/(double)((b-a)*(b-c));
-    else return 0; //x>b
-}
-
-void printTable(list<Implicant> ** table, int nVars){
-    for(int col = 0; col <= nVars; col++){
-        cout << "n var in literal = " << nVars-col << endl;
-        cout << "=====================" << endl;
-        for(int row = 0; row <= nVars-col; row++){
-            cout << "n negated = " << row << endl;
-            cout << "--------------" << endl;
-            for(Implicant &im : table[col][row])
-                cout << im << endl;
-            cout << endl;
-        }
-        cout << "=====================" << endl;
-    }
-}
-
 void printTable(set<Implicant> ** table, int nVars){
     for(int col = 0; col <= nVars; col++){
         cout << "n var in literal = " << nVars-col << endl;
@@ -75,21 +32,21 @@ void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
     if(minterms.size() == 0)
         return;
     int nVars = minterms.front().getNVars();
-    set<Implicant> * table = new set<Implicant> [(nVars+1),(nVars+1)];
-    //for(int i = 0; i <= nVars; i++)
-    //    table[i] = new set<Implicant> [nVars-i+1];
+    set<Implicant> ** table = new set<Implicant> * [nVars+1];
+    for(int i = 0; i <= nVars; i++)
+        table[i] = new set<Implicant> [nVars-i+1];
     for(const Implicant& im : minterms){
-        table[0,im.countNegatedVars()].insert(im);
+        table[0][im.countNegatedVars()].insert(im);
         implicants.insert(im);
     }
 
     for(int col = 0; col < nVars; col++){
         for(int row = 0; row < nVars-col; row++){
-            for(const Implicant &im1 : table[col,row+1]){
-                for(const Implicant &im2 : table[col,row]){
+            for(const Implicant &im1 : table[col][row+1]){
+                for(const Implicant &im2 : table[col][row]){
                     Implicant consensus = Implicant::distance1Merging(im1,im2);
                     if(consensus.isValid()){
-                        table[col+1,row].insert(consensus);
+                        table[col+1][row].insert(consensus);
                         implicants.insert(consensus);
                         implicants.erase(im1);
                         implicants.erase(im2);
@@ -101,8 +58,8 @@ void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
 
     //printTable(table, nVars);
 
-    //for(int i = 0; i <= nVars; i++)
-    //    delete [] table[i];
+    for(int i = 0; i <= nVars; i++)
+        delete [] table[i];
     delete [] table;
 }
 
@@ -178,7 +135,6 @@ list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
  */
 dynamic_bitset<> exactCover(Matrix &A, dynamic_bitset<> x, dynamic_bitset<> b){
     int c;
-
     A.reduce(x); //Reduce the matrix using essentials and dominance
     if(x.count() >= b.count()) return b; //Bound
     if(A.empty()) return x; //Solution completed
@@ -186,12 +142,13 @@ dynamic_bitset<> exactCover(Matrix &A, dynamic_bitset<> x, dynamic_bitset<> b){
     c = A.selectBranchingColumn();
 
     Matrix A2 = A;
-    x.set(A.removeColumnAndRows(c)); //Include implicant of column c to the solution
+    x.set(A2.removeColumnAndRows(c)); //Include implicant of column c to the solution
     dynamic_bitset<> x2 = exactCover(A2,x,b); //Branch
     if(x2.count() < b.count()) b = x2;
+
     A2 = A;
-    x.reset(A.removeColumn(c)); //Exclude implicant of column c to the solution
-    x2 = exactCover(A,x,b); //Branch
+    x.reset(A2.removeColumn(c)); //Exclude implicant of column c to the solution
+    x2 = exactCover(A2,x,b); //Branch
     if(x2.count() < b.count()) b = x2;
 
     return b;
@@ -206,13 +163,11 @@ void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result){
 
     Matrix m(minterms,prime);
     dynamic_bitset <>minset = exactCover(m,x,b);
+
     int i = 0;
-
-
     for(const Implicant &im : prime){
-        if(minset[i]){
+        if(minset[i])
             result.push_back(im);
-        }
         i++;
     }
 }
@@ -241,35 +196,6 @@ void generateUniformRandom(int nvars, double q, default_random_engine &rnd_eng, 
     }
 }
 
-/*
-void generateBinomialRandom(int nvars, double p, default_random_engine &rnd_eng){
-    string filename = string("instances/binomial_") + std::to_string(nvars) + "_" + std::to_string(p);
-    ofstream of(filename);
-    uniform_real_distribution<double> uir(0.0, 1.0);
-    for(int i = 0; i < 1<<nvars; i++){
-        double q = uir(rnd_eng);
-        cout << i << " " << q << " " << probBinomial((1<<nvars)-1,p,i) << endl;
-        if(q < probBinomial((1<<nvars)-1,p,i))
-            of << dynamic_bitset<> (nvars,i) << endl;
-    }
-    of.close();
-}
-
-void generateTriangularRandom(int nvars, double p, default_random_engine &rnd_eng){
-    string filename = string("instances/binomial_") + std::to_string(nvars) + "_" + std::to_string(p);
-    ofstream of(filename);
-    uniform_real_distribution<double> uir(0.0, 1.0);
-    int a = 0;
-    int b = (1<<nvars)-1;
-    int c =
-    for(int i = 0; i < 1<<nvars; i++){
-        double q = uir(rnd_eng);
-        cout << i << " " << q << " " << probBinomial((1<<nvars)-1,p,i) << endl;
-        if(q < probBinomial((1<<nvars)-1,p,i))
-            of << dynamic_bitset<> (nvars,i) << endl;
-    }
-    of.close();
-}*/
 /*
 bool verifyResult(const list<Implicant> minterms, const list<Implicant> implicants){
     set<Implicant> mintermsset;
