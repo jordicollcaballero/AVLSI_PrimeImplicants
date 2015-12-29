@@ -133,22 +133,24 @@ list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
  * x: partial solution
  * b: best solution found until the moment
  */
-dynamic_bitset<> exactCover(Matrix &A, dynamic_bitset<> x, dynamic_bitset<> b){
+dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b){
     int c;
-    A.reduce(x); //Reduce the matrix using essentials and dominance
+    A->reduce(x); //Reduce the matrix using essentials and dominance
     if(x.count() >= b.count()) return b; //Bound
-    if(A.empty()) return x; //Solution completed
+    if(A->empty()) return x; //Solution completed
 
-    c = A.selectBranchingColumn();
+    c = A->selectBranchingColumn();
 
-    Matrix A2 = A;
-    x.set(A2.removeColumnAndRows(c)); //Include implicant of column c to the solution
-    dynamic_bitset<> x2 = exactCover(A2,x,b); //Branch
+    A->saveState();
+    x.set(A->removeColumnAndRows(c)); //Include implicant of column c to the solution
+    dynamic_bitset<> x2 = exactCover(A,x,b); //Branch
+    A->restoreState();
     if(x2.count() < b.count()) b = x2;
 
-    A2 = A;
-    x.reset(A2.removeColumn(c)); //Exclude implicant of column c to the solution
-    x2 = exactCover(A2,x,b); //Branch
+    A->saveState();
+    x.reset(A->removeColumn(c)); //Exclude implicant of column c to the solution
+    x2 = exactCover(A,x,b); //Branch
+    A->restoreState();
     if(x2.count() < b.count()) b = x2;
 
     return b;
@@ -161,8 +163,9 @@ void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result){
     dynamic_bitset <>x(prime.size()); x.reset();
     dynamic_bitset <>b(prime.size()); b.set();
 
-    Matrix m(minterms,prime);
+    Matrix * m = new Matrix(minterms,prime);
     dynamic_bitset <>minset = exactCover(m,x,b);
+    delete m;
 
     int i = 0;
     for(const Implicant &im : prime){

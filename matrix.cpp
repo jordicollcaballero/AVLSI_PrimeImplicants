@@ -7,14 +7,15 @@ Matrix::Matrix(bool **vals, int nRow, int nCol)
 {
     nRows = nRow;
     nColumns = nCol;
-    this->implicants.resize(nColumns);
-    matrix.resize(nRows);
+    idx = new int[nColumns];
+    matrix = new vector<bool> *[nRows];
     for(int j = 0; j < nColumns; j++)
-        this->implicants[j] = j;
+        this->idx[j] = j;
     for(int i = 0; i < nRows; i++){
+        matrix[i] = new vector<bool>(nColumns);
         for(int j = 0; j < nColumns; j++){
-            matrix[i].resize(nColumns);
-            matrix[i][j] = vals[i][j];
+            matrix[i]->resize(nColumns);
+            (*(matrix[i]))[j] = vals[i][j];
         }
     }
 }
@@ -23,18 +24,17 @@ Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants
 {
     nRows = minterms.size();
     nColumns = implicants.size();
-    this->implicants.resize(nColumns);
-    matrix.resize(nRows);
+    idx = new int[nColumns];
+    matrix = new vector<bool> *[nRows];
     for(int j = 0; j < nColumns; j++)
-        this->implicants[j] = j;
+        this->idx[j] = j;
+
     int i = 0;
-    int j = 0;
     for(const Implicant &minterm : minterms){
-        j = 0;
+        int j = 0;
         for(const Implicant &implicant : implicants){
-            matrix[i].resize(nColumns);
-            matrix[i][j] = implicant.covers(minterm);
-          //  cout << minterm << " " << implicant << " " << (implicant.covers(minterm) ? "yes" : "no") << endl;
+            matrix[i] = new vector<bool>(nColumns);
+            (*(matrix[i]))[j] = implicant.covers(minterm);
             j++;
         }
         i++;
@@ -43,6 +43,7 @@ Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants
 
 void Matrix::reduce(dynamic_bitset<> &x)
 {
+
     set<int> to_remove;
     bool changes;
 
@@ -118,39 +119,37 @@ int Matrix::selectBranchingColumn() const
 void Matrix::removeRow(int row)
 {
     nRows--;
-    if(row < nRows)
-        matrix[row] = matrix[nRows];
+    vector<bool> *aux = matrix[row];
+    matrix[row] = matrix[nRows];
+    matrix[nRows] = aux;
+    removedRowsStack.front().push_front(row);
 }
 
 int Matrix::removeColumn(int col)
 {
     nColumns--;
-    int implicant = implicants[col];
-    if(col < nColumns)
-    {
-        implicants[col]=implicants[nColumns];
-        for(int i = 0; i < nRows; i++)
-            matrix[i][col] = matrix[i][nColumns];
-    }
+    int implicant = idx[col];
+    idx[col] = idx[nColumns];
+    idx[nColumns] = implicant;
+    removedColumnsStack.front().push_front(col);
     return implicant;
 }
 
 int Matrix::removeColumnAndRows(int col)
 {
-    nColumns--;
-    int implicant = implicants[col];
-
-    if(col < nColumns)
-        implicants[col]=implicants[nColumns];
-
     for(int i = 0; i < nRows; i++){
-        if(matrix[i][col]){
+        if((*(matrix[i]))[idx[col]]){
             removeRow(i);
             i--;
         }
-        else if(col < nColumns) matrix[i][col] = matrix[i][nColumns];
     }
 
+    nColumns--;
+    int implicant = idx[col];
+    idx[col] = idx[nColumns];
+    idx[nColumns] = implicant;
+
+    removedColumnsStack.front().push_front(col);
     return implicant;
 }
 
@@ -159,23 +158,56 @@ bool Matrix::empty() const
     return nRows == 0;
 }
 
+void Matrix::saveState()
+{
+    removedColumnsStack.push_front(list<int>());
+    removedRowsStack.push_front(list<int>());
+}
+
+void Matrix::restoreState()
+{
+    for(const int &row : removedRowsStack.front()){
+        vector<bool> *aux = matrix[row];
+        matrix[row] = matrix[nRows];
+        matrix[nRows] = aux;
+        nRows++;
+    }
+    removedRowsStack.pop_front();
+
+    for(const int &col : removedColumnsStack.front()){
+        int aux = idx[col];
+        idx[col] = idx[nColumns];
+        idx[nColumns] = aux;
+        nColumns++;
+    }
+    removedColumnsStack.pop_front();
+}
+
 void Matrix::print() const
 {
     for(int j = 0; j < nColumns; j++)
-        cout << implicants[j] << " ";
+        cout << idx[j] << " ";
     cout << endl << endl;
     for(int i = 0; i < nRows; i++){
         for(int j = 0; j < nColumns; j++)
-            cout << (matrix[i][j] ? 1 : 0) << " ";
+            cout << ((*(matrix[i]))[idx[j]] ? 1 : 0) << " ";
         cout << endl;
     }
+}
+
+Matrix::~Matrix()
+{
+    delete [] idx;
+    for(int i = 0; i < nRows; i++)
+        delete matrix[i];
+    delete [] matrix;
 }
 
 int Matrix::essentialColumn(int row){
     int nImp = 0;
     int selectedCol = -1;
     for(int col = 0; nImp <= 1 && col < nColumns ; col++){
-        if(matrix[row][col]){
+        if((*(matrix[row]))[idx[col]]){
             nImp++;
             selectedCol = col;
         }
@@ -185,14 +217,14 @@ int Matrix::essentialColumn(int row){
 
 bool Matrix::columnDominance(int i, int j){
     for(int row = 0; row < nRows; row++)
-        if(matrix[row][j] && !matrix[row][i])
+        if((*(matrix[row]))[idx[j]] && !(*(matrix[row]))[idx[i]])
             return false;
     return true;
 }
 
 bool Matrix::rowDominance(int i, int j){
     for(int col = 0; col < nColumns; col++)
-        if(matrix[j][col] && !matrix[i][col])
+        if((*(matrix[j]))[idx[col]] && !(*(matrix[i]))[idx[col]])
             return false;
     return true;
 }
