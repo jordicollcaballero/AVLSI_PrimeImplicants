@@ -2,13 +2,44 @@
 #include <fstream>
 #include <cstdlib>
 #include <list>
+#include <set>
 #include <sstream>
 #include <string>
+#include <cmath>
+#include "time.h"
 #include "implicant.h"
 #include "matrix.h"
 
 using namespace std;
 using namespace boost;
+
+//http://stackoverflow.com/questions/9330915/number-of-combinations-n-choose-r-in-c
+unsigned nChoosek(unsigned n, unsigned k )
+{
+    if (k > n) return 0;
+    if (k * 2 > n) k = n-k;
+    if (k == 0) return 1;
+
+    int result = n;
+    for(int i = 2; i <= k; ++i ) {
+        result *= (n-i+1);
+        result /= i;
+    }
+    return result;
+}
+
+double probBinomial(int n, double p, int k){
+    return nChoosek(n,k) * pow(p,k)*pow(1-p,n-k);
+}
+
+
+double probTriangular(int a, int b, int c, int k){
+    if(k < a) return 0;
+    else if(k < c) return 2*(k-a)/(double)((b-a)*(c-a));
+    else if(k==c) return 2/(double)(b-a);
+    else if(k <= b) return 2*(b-k)/(double)((b-a)*(b-c));
+    else return 0; //x>b
+}
 
 void printTable(list<Implicant> ** table, int nVars){
     for(int col = 0; col <= nVars; col++){
@@ -25,37 +56,54 @@ void printTable(list<Implicant> ** table, int nVars){
     }
 }
 
-list<Implicant> tabularMethod(const list<Implicant>& minterms){
-    list<Implicant> implicants;
-    int nVars = implicants.front().getNVars();
-    list<Implicant> ** table = new list<Implicant> * [nVars+1];
-    for(int i = 0; i <= nVars; i++)
-        table[i] = new list<Implicant> [nVars-i+1];
-    for(const Implicant& im : minterms)
-        table[0][im.countNegatedVars()].push_back(im);
+void printTable(set<Implicant> ** table, int nVars){
+    for(int col = 0; col <= nVars; col++){
+        cout << "n var in literal = " << nVars-col << endl;
+        cout << "=====================" << endl;
+        for(int row = 0; row <= nVars-col; row++){
+            cout << "n negated = " << row << endl;
+            cout << "--------------" << endl;
+            for(const Implicant &im : table[col][row])
+                cout << im << endl;
+            cout << endl;
+        }
+        cout << "=====================" << endl;
+    }
+}
+
+void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
+    if(minterms.size() == 0)
+        return;
+    int nVars = minterms.front().getNVars();
+    set<Implicant> * table = new set<Implicant> [(nVars+1),(nVars+1)];
+    //for(int i = 0; i <= nVars; i++)
+    //    table[i] = new set<Implicant> [nVars-i+1];
+    for(const Implicant& im : minterms){
+        table[0,im.countNegatedVars()].insert(im);
+        implicants.insert(im);
+    }
 
     for(int col = 0; col < nVars; col++){
         for(int row = 0; row < nVars-col; row++){
-            for(Implicant &im1 : table[col][row+1]){
-                for(Implicant &im2 : table[col][row]){
-                    cout << im1 << " " << im2 << endl;
+            for(const Implicant &im1 : table[col,row+1]){
+                for(const Implicant &im2 : table[col,row]){
                     Implicant consensus = Implicant::distance1Merging(im1,im2);
                     if(consensus.isValid()){
-                        //Vigilar al afegir, pot ser que ja hi sigui!
-                        table[col+1][row].push_back(consensus);
+                        table[col+1,row].insert(consensus);
+                        implicants.insert(consensus);
+                        implicants.erase(im1);
+                        implicants.erase(im2);
                     }
                 }
             }
         }
     }
 
-    printTable(table, nVars);
+    //printTable(table, nVars);
 
-    for(int i = 0; i < nVars; i++)
-        delete [] table[i];
+    //for(int i = 0; i <= nVars; i++)
+    //    delete [] table[i];
     delete [] table;
-
-    return implicants;
 }
 
 
@@ -123,33 +171,244 @@ list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
     }
 }
 
+/*
+ * A: matrix of covering of implicants on minterms
+ * x: partial solution
+ * b: best solution found until the moment
+ */
 dynamic_bitset<> exactCover(Matrix &A, dynamic_bitset<> x, dynamic_bitset<> b){
     int c;
 
-    A.reduce(x);
-    if(x.count() >= b.count()) return b;
-    if(A.empty()) return x;
+    A.reduce(x); //Reduce the matrix using essentials and dominance
+    if(x.count() >= b.count()) return b; //Bound
+    if(A.empty()) return x; //Solution completed
 
     c = A.selectBranchingColumn();
 
     Matrix A2 = A;
-    x.set(A2.removeColumnAndRows(c));
-    dynamic_bitset<> x2 = exactCover(A2,x,b);
+    x.set(A.removeColumnAndRows(c)); //Include implicant of column c to the solution
+    dynamic_bitset<> x2 = exactCover(A2,x,b); //Branch
     if(x2.count() < b.count()) b = x2;
-
     A2 = A;
-    x.reset(A2.removeColumn(c));
-    x2 = exactCover(A2,x,b);
+    x.reset(A.removeColumn(c)); //Exclude implicant of column c to the solution
+    x2 = exactCover(A,x,b); //Branch
     if(x2.count() < b.count()) b = x2;
 
     return b;
 }
 
+void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result){
+    set<Implicant> prime;
+    tabularMethod(minterms,prime);
+
+    dynamic_bitset <>x(prime.size()); x.reset();
+    dynamic_bitset <>b(prime.size()); b.set();
+
+    Matrix m(minterms,prime);
+    dynamic_bitset <>minset = exactCover(m,x,b);
+    int i = 0;
+
+
+    for(const Implicant &im : prime){
+        if(minset[i]){
+            result.push_back(im);
+        }
+        i++;
+    }
+}
+
+void generateUniformRandom(int nvars, int nminterms, default_random_engine &rnd_eng){
+    string filename = string("instances/uniform_") + std::to_string(nvars) + "_" + std::to_string(nminterms);
+    set<dynamic_bitset<> > minterms;
+    ofstream of(filename);
+    uniform_int_distribution<int> uir(0, (1<<nvars)-1);
+    for(int i = 0; i < nminterms; ){
+        dynamic_bitset<> minterm(nvars,uir(rnd_eng));
+        if(minterms.insert(minterm).second)
+            i++;
+    }
+    for(const dynamic_bitset<> &minterm : minterms)
+        of << minterm << endl;
+    of.close();
+}
+
+void generateUniformRandom(int nvars, double q, default_random_engine &rnd_eng, list<Implicant> &minterms){
+    dynamic_bitset<> mask(nvars,(1<<nvars)-1);
+    uniform_real_distribution<double> uir(0.0, 1.0);
+    for(int i = 0; i < 1<<nvars; i++){
+        double p = uir(rnd_eng);
+        if(p <= q) minterms.push_back(Implicant(mask,dynamic_bitset<> (nvars,i)));
+    }
+}
+
+/*
+void generateBinomialRandom(int nvars, double p, default_random_engine &rnd_eng){
+    string filename = string("instances/binomial_") + std::to_string(nvars) + "_" + std::to_string(p);
+    ofstream of(filename);
+    uniform_real_distribution<double> uir(0.0, 1.0);
+    for(int i = 0; i < 1<<nvars; i++){
+        double q = uir(rnd_eng);
+        cout << i << " " << q << " " << probBinomial((1<<nvars)-1,p,i) << endl;
+        if(q < probBinomial((1<<nvars)-1,p,i))
+            of << dynamic_bitset<> (nvars,i) << endl;
+    }
+    of.close();
+}
+
+void generateTriangularRandom(int nvars, double p, default_random_engine &rnd_eng){
+    string filename = string("instances/binomial_") + std::to_string(nvars) + "_" + std::to_string(p);
+    ofstream of(filename);
+    uniform_real_distribution<double> uir(0.0, 1.0);
+    int a = 0;
+    int b = (1<<nvars)-1;
+    int c =
+    for(int i = 0; i < 1<<nvars; i++){
+        double q = uir(rnd_eng);
+        cout << i << " " << q << " " << probBinomial((1<<nvars)-1,p,i) << endl;
+        if(q < probBinomial((1<<nvars)-1,p,i))
+            of << dynamic_bitset<> (nvars,i) << endl;
+    }
+    of.close();
+}*/
+/*
+bool verifyResult(const list<Implicant> minterms, const list<Implicant> implicants){
+    set<Implicant> mintermsset;
+    for(const Implicant & min : minterms)
+        mintermsset.insert(min);
+    for(const Implicant & im : implicants){
+        for(const Implicant &min : im.getImplicants()){
+            if(mintermsset.find(min) == mintermsset.end() && im.covers(min))
+                return false;
+            else if(mintermsset.find(min) != mintermsset.end() && !im.covers(min))
+                return false;
+        }
+    }
+    return true;
+}*/
+
+void experiments1(int argc, char ** argv){
+    std::default_random_engine rnd_eng(1234);
+
+    double fraction = 0.3;
+    int min_nvars = 4;
+    int max_nvars = 10;
+    int nreps = 5;
+
+    for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
+        double runtime = 0;
+
+        for(int rep = 0; rep < nreps; rep++){
+            list<Implicant> minterms;
+            list<Implicant> result;
+            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+
+            clock_t initemps=clock();
+            QuineMcCluskey(minterms,result);
+            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
+
+        }
+        cout << nvars << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
+    }
+}
+
+void experiments11(int argc, char ** argv){
+    std::default_random_engine rnd_eng(123);
+
+    double fraction = 0.3;
+    int min_nvars = 4;
+    int max_nvars = 10;
+    int nreps = 5;
+
+    for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
+        double runtime = 0;
+
+        for(int rep = 0; rep < nreps; rep++){
+            list<Implicant> minterms;
+            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+            clock_t initemps=clock();
+            set<Implicant> prime;
+
+            tabularMethod(minterms,prime);
+            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
+
+        }
+        cout << nvars << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
+    }
+}
+
+void experiments2(int argc, char ** argv){
+    std::default_random_engine rnd_eng(1234);
+
+    double min_fraction = 0.05;
+    double max_fraction = 0.85;
+    int nvars = 8;
+    int nreps = 5;
+
+    for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
+        double runtime = 0;
+        for(int rep = 0; rep < nreps; rep++){
+            list<Implicant> minterms;
+            list<Implicant> result;
+            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+            clock_t initemps=clock();
+            QuineMcCluskey(minterms,result);
+            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
+        }
+        cout << fraction << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
+    }
+}
+void experiments22(int argc, char ** argv){
+    std::default_random_engine rnd_eng(1234);
+
+    double min_fraction = 0.05;
+    double max_fraction = 0.85;
+    int nvars = 8;
+    int nreps = 5;
+
+    for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
+        double runtime = 0;
+        for(int rep = 0; rep < nreps; rep++){
+            list<Implicant> minterms;
+            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+            clock_t initemps=clock();
+            set<Implicant> prime;
+
+            tabularMethod(minterms,prime);
+            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
+        }
+        cout << fraction << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
+    }
+}
+
+void experiments3(int argc, char ** argv){
+    std::default_random_engine rnd_eng(1234);
+
+    double min_fraction = 0.05;
+    double max_fraction = 1.1;
+    int nvars = 6;
+    int nreps = 10;
+
+    for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
+        double nimp = 0;
+        for(int rep = 0; rep < nreps; rep++){
+            list<Implicant> minterms;
+            list<Implicant> result;
+            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+            QuineMcCluskey(minterms,result);
+            nimp+=result.size();
+        }
+        cout << fraction << ";" << (1<<nvars)*fraction << ";" << nimp/nreps << endl;
+    }
+}
 
 int main (int argc, char ** argv) {
 
-    ifstream input;
-    input.open("instances/test2.txt");
+    experiments3(argc,argv);
+
+    /*ifstream input;
+    string instance("instances/test.txt");
+
+    input.open(instance);
 
     string word;
 
@@ -159,22 +418,41 @@ int main (int argc, char ** argv) {
 
     input.close();
 
-    /*
-    Implicant im1(string("0101"));
-    Implicant im2(string("1101"));
-    Implicant im3(string("0001"));
-    Implicant im4(string("1001"));
-    Implicant consensus1 = Implicant::distance1Merging(im1,im2);
-    Implicant consensus2 = Implicant::distance1Merging(im3,im4);
-    Implicant consensus = Implicant::distance1Merging(consensus1,consensus2);
-    cout << consensus1 << endl << consensus2 << endl;
-    cout << (consensus.isValid() ? "valid" : "invalid") << endl;
-    cout << consensus << endl;
+    list<Implicant> result;
+    QuineMcCluskey(minterms,result);
+
+    ofstream output;
+    output.open(instance + ".res");
+    for(const Implicant & im : result)
+        output << im << endl;
+    output.close();
+*/
+    /*input.open("instances/testmatriu.txt");
+
+    int nRow, nCol, val;
+    input >> nRow >> nCol;
+
+    bool ** mat = new bool *[nRow];
+    for(int i = 0; i < nRow; i++){
+        mat[i] = new bool[nCol];
+        for(int j = 0; j < nCol; j++){
+            input >> val;
+            mat[i][j] = val ? true : false;
+        }
+    }
+
+
+    /*m.removeColumnAndRows(11);
+    cout << endl << endl;
+    m.print();*/
+/*
+    std::default_random_engine rnd_eng(1234);
+    double fraction = 0.3;
+    int nvars = 10;
+    int nminterms = (int)((1<<nvars)*fraction);
+
+    generateBinomialRandom(nvars,fraction,rnd_eng);
     */
-
-    //tabularMethod(minterms);
-
-
     return 0;
 }
 

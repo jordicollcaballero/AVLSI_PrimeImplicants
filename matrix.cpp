@@ -3,8 +3,23 @@
 #include <boost/range/adaptor/reversed.hpp>
 #include <set>
 
+Matrix::Matrix(bool **vals, int nRow, int nCol)
+{
+    nRows = nRow;
+    nColumns = nCol;
+    this->implicants.resize(nColumns);
+    matrix.resize(nRows);
+    for(int j = 0; j < nColumns; j++)
+        this->implicants[j] = j;
+    for(int i = 0; i < nRows; i++){
+        for(int j = 0; j < nColumns; j++){
+            matrix[i].resize(nColumns);
+            matrix[i][j] = vals[i][j];
+        }
+    }
+}
 
-Matrix::Matrix(const list<Implicant> &minterms, const list<Implicant> &implicants)
+Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants)
 {
     nRows = minterms.size();
     nColumns = implicants.size();
@@ -15,9 +30,11 @@ Matrix::Matrix(const list<Implicant> &minterms, const list<Implicant> &implicant
     int i = 0;
     int j = 0;
     for(const Implicant &minterm : minterms){
+        j = 0;
         for(const Implicant &implicant : implicants){
             matrix[i].resize(nColumns);
             matrix[i][j] = implicant.covers(minterm);
+          //  cout << minterm << " " << implicant << " " << (implicant.covers(minterm) ? "yes" : "no") << endl;
             j++;
         }
         i++;
@@ -41,8 +58,12 @@ void Matrix::reduce(dynamic_bitset<> &x)
 
         if(!to_remove.empty()){
             changes = true;
-            for(const int &col : adaptors::reverse(to_remove))
+            for(const int &col : adaptors::reverse(to_remove)){
                 x.set(removeColumnAndRows(col));
+               // cout << "column and rows" << endl;
+               // print();
+            }
+            to_remove.clear();
         }
 
         //Column dominance
@@ -57,8 +78,12 @@ void Matrix::reduce(dynamic_bitset<> &x)
 
         if(!to_remove.empty()){
             changes = true;
-            for(const int &col : adaptors::reverse(to_remove))
+            for(const int &col : adaptors::reverse(to_remove)){
                 removeColumn(col);
+             //   cout << "column" << endl;
+             //   print();
+            }
+            to_remove.clear();
         }
 
         //Row dominance
@@ -72,17 +97,20 @@ void Matrix::reduce(dynamic_bitset<> &x)
         }
 
         if(!to_remove.empty()){
-            //sort to_remove decreasing
             changes = true;
-            for(const int &row : adaptors::reverse(to_remove))
+            for(const int &row : adaptors::reverse(to_remove)){
                 removeRow(row);
+           //     cout << "row" << endl;
+           //     print();
+            }
+            to_remove.clear();
         }
 
     }while(changes);
 
 }
 
-int Matrix::selectBranchingColumn()
+int Matrix::selectBranchingColumn() const
 {
     return 0;
 }
@@ -111,24 +139,36 @@ int Matrix::removeColumnAndRows(int col)
 {
     nColumns--;
     int implicant = implicants[col];
+
     if(col < nColumns)
-    {
         implicants[col]=implicants[nColumns];
-        for(int i = 0; i < nRows; i++){
-            if(matrix[i][col]){
-                nRows--;
-                if(i < nRows) matrix[i] = matrix[nRows];
-                i--;
-            }
-            else matrix[i][col] = matrix[i][nColumns];
+
+    for(int i = 0; i < nRows; i++){
+        if(matrix[i][col]){
+            removeRow(i);
+            i--;
         }
+        else if(col < nColumns) matrix[i][col] = matrix[i][nColumns];
     }
+
     return implicant;
 }
 
-bool Matrix::empty()
+bool Matrix::empty() const
 {
     return nRows == 0;
+}
+
+void Matrix::print() const
+{
+    for(int j = 0; j < nColumns; j++)
+        cout << implicants[j] << " ";
+    cout << endl << endl;
+    for(int i = 0; i < nRows; i++){
+        for(int j = 0; j < nColumns; j++)
+            cout << (matrix[i][j] ? 1 : 0) << " ";
+        cout << endl;
+    }
 }
 
 int Matrix::essentialColumn(int row){
@@ -152,9 +192,8 @@ bool Matrix::columnDominance(int i, int j){
 
 bool Matrix::rowDominance(int i, int j){
     for(int col = 0; col < nColumns; col++)
-        if(matrix[col][j] && !matrix[col][i])
+        if(matrix[j][col] && !matrix[i][col])
             return false;
     return true;
 }
-
 

@@ -3,6 +3,7 @@
 
 #include <boost/dynamic_bitset.hpp> //sudo apt install libboost1.55-all-dev
 #include <list>
+#include <set>
 #include "implicant.h"
 
 using namespace boost;
@@ -20,13 +21,15 @@ private:
     bool rowDominance(int i, int j);
 
 public:
-    Matrix(const list<Implicant> &minterms, const list<Implicant> &implicants);
+    Matrix(bool ** vals, int nRow, int nCol);
+    Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants);
     void reduce(dynamic_bitset<> &x);
-    int selectBranchingColumn();
+    int selectBranchingColumn() const;
     void removeRow(int row);
     int removeColumn(int col);
     int removeColumnAndRows(int col);
-    bool empty();
+    bool empty() const;
+    void print() const;
 };
 
 #endif // MATRIX_H

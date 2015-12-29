@@ -12,6 +12,13 @@ Implicant::Implicant(const Implicant &i)
     valid = i.valid;
 }
 
+Implicant::Implicant(const dynamic_bitset<> &mask, const dynamic_bitset<> &variables)
+{
+    this->mask = mask;
+    this->variables = variables;
+    valid = true;
+}
+
 Implicant::Implicant(const string &s)
 {
     mask = dynamic_bitset<>(s.size());
@@ -121,7 +128,11 @@ Implicant Implicant::trueImplicant(int nVars)
 }
 
 
-bool Implicant::operator<(const Implicant &rhs)
+bool Implicant::operator<(const Implicant &rhs) const
 {
-    return variables.to_ulong() < rhs.variables.to_ulong();
+    unsigned long maskulong = mask.to_ulong();
+    unsigned long rhsmaskulong = rhs.mask.to_ulong();
+    if(maskulong < rhsmaskulong) return true;
+    else if(maskulong > rhsmaskulong) return false;
+    else return variables.to_ulong() < rhs.variables.to_ulong();
 }

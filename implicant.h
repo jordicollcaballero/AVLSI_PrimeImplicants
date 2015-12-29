@@ -19,13 +19,14 @@ public:
     Implicant();
     Implicant(const Implicant &i);
     Implicant(const string &s);
+    Implicant(const dynamic_bitset<> &mask, const dynamic_bitset<> &variables);
     int getNVars() const;
     int countNegatedVars() const;
     bool covers(const Implicant &i) const;
     bool isValid() const;
     dynamic_bitset<> maskedVars(const dynamic_bitset<> &mask) const;
     friend ostream& operator<< (ostream &out, const Implicant& imp);
-    inline bool operator< (const Implicant& rhs);
+    bool operator< (const Implicant& rhs) const;
     static Implicant distance1Merging(const Implicant &i1, const Implicant &i2);
     static Implicant consensus(const Implicant &i1, const Implicant &i2);
     static Implicant trueImplicant(int nVars);
