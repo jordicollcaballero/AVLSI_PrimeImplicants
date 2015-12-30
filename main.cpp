@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 #include <cmath>
+#include <boost/program_options.hpp>
 #include "time.h"
 #include "implicant.h"
 #include "matrix.h"
@@ -135,12 +136,12 @@ list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
  */
 dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b){
     int c;
+
     A->reduce(x); //Reduce the matrix using essentials and dominance
     if(x.count() >= b.count()) return b; //Bound
     if(A->empty()) return x; //Solution completed
 
     c = A->selectBranchingColumn();
-
     A->saveState();
     x.set(A->removeColumnAndRows(c)); //Include implicant of column c to the solution
     dynamic_bitset<> x2 = exactCover(A,x,b); //Branch
@@ -162,7 +163,6 @@ void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result){
 
     dynamic_bitset <>x(prime.size()); x.reset();
     dynamic_bitset <>b(prime.size()); b.set();
-
     Matrix * m = new Matrix(minterms,prime);
     dynamic_bitset <>minset = exactCover(m,x,b);
     delete m;
@@ -173,21 +173,6 @@ void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result){
             result.push_back(im);
         i++;
     }
-}
-
-void generateUniformRandom(int nvars, int nminterms, default_random_engine &rnd_eng){
-    string filename = string("instances/uniform_") + std::to_string(nvars) + "_" + std::to_string(nminterms);
-    set<dynamic_bitset<> > minterms;
-    ofstream of(filename);
-    uniform_int_distribution<int> uir(0, (1<<nvars)-1);
-    for(int i = 0; i < nminterms; ){
-        dynamic_bitset<> minterm(nvars,uir(rnd_eng));
-        if(minterms.insert(minterm).second)
-            i++;
-    }
-    for(const dynamic_bitset<> &minterm : minterms)
-        of << minterm << endl;
-    of.close();
 }
 
 void generateUniformRandom(int nvars, double q, default_random_engine &rnd_eng, list<Implicant> &minterms){
@@ -313,7 +298,7 @@ void experiments3(int argc, char ** argv){
     std::default_random_engine rnd_eng(1234);
 
     double min_fraction = 0.05;
-    double max_fraction = 1.1;
+    double max_fraction = 1.01;
     int nvars = 6;
     int nreps = 10;
 
@@ -324,6 +309,9 @@ void experiments3(int argc, char ** argv){
             list<Implicant> result;
             generateUniformRandom(nvars,fraction,rnd_eng,minterms);
             QuineMcCluskey(minterms,result);
+            cout << minterms.size() << endl;
+            cout << result.size() << endl;
+            //cout << result.front() << endl;
             nimp+=result.size();
         }
         cout << fraction << ";" << (1<<nvars)*fraction << ";" << nimp/nreps << endl;
@@ -332,9 +320,61 @@ void experiments3(int argc, char ** argv){
 
 int main (int argc, char ** argv) {
 
-    experiments3(argc,argv);
+    // Parse input arguments for options
+    /*// http://www.boost.org/doc/libs/1_41_0/doc/html/program_options/tutorial.html
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help", "produce help message")
+        ("n", po::value<double>(), "number of variables")
+        ("seed,s", po::value<int>(), "random seed")
+        ("width,w", po::value<int>(), "width of the lattice (only for lattice graphs)")
+        ("height,h", po::value<int>(), "height of the lattice (only for lattice graphs)")
+        ("p0", po::value<float>(), "fraction of initially infected nodes")
+        ("p", po::value<float>(), "connection probability in Erdos-Renyi graph")
+        ("n,n", po::value<int>(), "number of nodes (for non-lattice graphs)")
+        ("beta", po::value<double>(), "probability of infecting each neighbour at a time")
+        ("gamma", po::value<double>(), "probability of recovering at a time"
+         "vertex")
+        ("tmax,t", po::value<int>(), "amount of time of simulation")
+        ("model,m", po::value<string>(), "tye of graph: "
+         "complete, lattice, star, er, tree")
+    ;
 
-    /*ifstream input;
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        cout << desc << "\n";
+        return 1;
+    }
+
+
+    if (vm.count("seed")) seed = vm["seed"].as<int>();
+    if (vm.count("p0")) p0 = vm["p0"].as<float>();
+    if (vm.count("p")) p_er = vm["p"].as<float>();
+    if (vm.count("tmax")) tmax = vm["tmax"].as<int>();
+    if (vm.count("n")) n = vm["n"].as<int>();
+    if (vm.count("width")) w = vm["width"].as<int>();
+    if (vm.count("height")) h = vm["height"].as<int>();
+    if (vm.count("model")) model = vm["model"].as<string>();
+    if (vm.count("beta")) beta = vm["beta"].as<double>();
+    if (vm.count("gamma")) gamma = vm["gamma"].as<double>();
+
+
+    //Check errors
+    if(model == "lattice" && (!vm.count("width") || !vm.count("height")) ){
+        cout << "w and h must be specifiec for lattice graph" << endl;
+        return -1;
+    }
+    if(model != "lattice" && !vm.count("n")){
+        cout << "n must be specifiec for " << model << " graph" << endl;
+        return -1;
+    }
+*/
+    //experiments3(argc,argv);
+
+    ifstream input;
     string instance("instances/test.txt");
 
     input.open(instance);
@@ -355,7 +395,8 @@ int main (int argc, char ** argv) {
     for(const Implicant & im : result)
         output << im << endl;
     output.close();
-*/
+
+
     /*input.open("instances/testmatriu.txt");
 
     int nRow, nCol, val;
@@ -371,8 +412,15 @@ int main (int argc, char ** argv) {
     }
 
 
-    /*m.removeColumnAndRows(11);
-    cout << endl << endl;
+    Matrix m(mat,nRow,nCol);
+    m.saveState();
+    m.print();
+    dynamic_bitset <>x(nCol); x.reset();
+    //m.reduce(x);
+    m.removeColumnAndRows(9);
+    m.print();
+    //cout << endl << endl << x << endl;
+    m.restoreState();
     m.print();*/
 /*
     std::default_random_engine rnd_eng(1234);

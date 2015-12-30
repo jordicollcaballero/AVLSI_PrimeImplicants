@@ -13,11 +13,14 @@ Matrix::Matrix(bool **vals, int nRow, int nCol)
         this->idx[j] = j;
     for(int i = 0; i < nRows; i++){
         matrix[i] = new vector<bool>(nColumns);
-        for(int j = 0; j < nColumns; j++){
-            matrix[i]->resize(nColumns);
-            (*(matrix[i]))[j] = vals[i][j];
-        }
+        for(int j = 0; j < nColumns; j++)
+            mat(i,j) = vals[i][j];
     }
+
+    nRemovedRows = 0;
+    nRemovedColumns = 0;
+
+    colSelectCriteria = FIRST;
 }
 
 Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants)
@@ -32,13 +35,18 @@ Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants
     int i = 0;
     for(const Implicant &minterm : minterms){
         int j = 0;
+        matrix[i] = new vector<bool>(nColumns);
         for(const Implicant &implicant : implicants){
-            matrix[i] = new vector<bool>(nColumns);
-            (*(matrix[i]))[j] = implicant.covers(minterm);
+            mat(i,j) = implicant.covers(minterm);
             j++;
         }
         i++;
     }
+
+    nRemovedRows = 0;
+    nRemovedColumns = 0;
+
+    colSelectCriteria = FIRST;
 }
 
 void Matrix::reduce(dynamic_bitset<> &x)
@@ -49,21 +57,16 @@ void Matrix::reduce(dynamic_bitset<> &x)
 
     do{
         changes = false;
-
         //Essential columns
         for(int i = 0; i < nRows; i++){
             int essential = essentialColumn(i);
             if(essential != -1)
                 to_remove.insert(essential);
         }
-
         if(!to_remove.empty()){
             changes = true;
-            for(const int &col : adaptors::reverse(to_remove)){
+            for(const int &col : adaptors::reverse(to_remove))
                 x.set(removeColumnAndRows(col));
-               // cout << "column and rows" << endl;
-               // print();
-            }
             to_remove.clear();
         }
 
@@ -76,14 +79,10 @@ void Matrix::reduce(dynamic_bitset<> &x)
                     to_remove.insert(i);
             }
         }
-
         if(!to_remove.empty()){
             changes = true;
-            for(const int &col : adaptors::reverse(to_remove)){
+            for(const int &col : adaptors::reverse(to_remove))
                 removeColumn(col);
-             //   cout << "column" << endl;
-             //   print();
-            }
             to_remove.clear();
         }
 
@@ -96,14 +95,10 @@ void Matrix::reduce(dynamic_bitset<> &x)
                     to_remove.insert(j);
             }
         }
-
         if(!to_remove.empty()){
             changes = true;
-            for(const int &row : adaptors::reverse(to_remove)){
+            for(const int &row : adaptors::reverse(to_remove))
                 removeRow(row);
-           //     cout << "row" << endl;
-           //     print();
-            }
             to_remove.clear();
         }
 
@@ -113,7 +108,17 @@ void Matrix::reduce(dynamic_bitset<> &x)
 
 int Matrix::selectBranchingColumn() const
 {
-    return 0;
+    switch(colSelectCriteria){
+        case MAX_ONES:
+            return selectMaxOnes();
+        case MIN_ONES:
+            return selectMinOnes();
+        case RANDOM:
+            return selectRandom();
+        case FIRST:
+        default:
+            return selectFirst();
+    }
 }
 
 void Matrix::removeRow(int row)
@@ -122,7 +127,9 @@ void Matrix::removeRow(int row)
     vector<bool> *aux = matrix[row];
     matrix[row] = matrix[nRows];
     matrix[nRows] = aux;
-    removedRowsStack.front().push_front(row);
+
+    removedRowsStack.push_front(row);
+    nRemovedRows++;
 }
 
 int Matrix::removeColumn(int col)
@@ -131,56 +138,64 @@ int Matrix::removeColumn(int col)
     int implicant = idx[col];
     idx[col] = idx[nColumns];
     idx[nColumns] = implicant;
-    removedColumnsStack.front().push_front(col);
+
+    removedColumnsStack.push_front(col);
+    nRemovedColumns++;
     return implicant;
 }
 
 int Matrix::removeColumnAndRows(int col)
 {
     for(int i = 0; i < nRows; i++){
-        if((*(matrix[i]))[idx[col]]){
+        if(mat(i,col)){
             removeRow(i);
             i--;
         }
     }
-
-    nColumns--;
-    int implicant = idx[col];
-    idx[col] = idx[nColumns];
-    idx[nColumns] = implicant;
-
-    removedColumnsStack.front().push_front(col);
-    return implicant;
+    return removeColumn(col);
 }
 
 bool Matrix::empty() const
 {
-    return nRows == 0;
+    return nColumns == 0 || nRows == 0;
 }
 
 void Matrix::saveState()
 {
-    removedColumnsStack.push_front(list<int>());
-    removedRowsStack.push_front(list<int>());
+    nRemovedColumnsStack.push_front(nRemovedColumns);
+    nRemovedColumns = 0;
+    nRemovedRowsStack.push_front(nRemovedRows);
+    nRemovedRows = 0;
 }
 
 void Matrix::restoreState()
 {
-    for(const int &row : removedRowsStack.front()){
+    for(int i = 0; i < nRemovedRows; i++){
+        int row = removedRowsStack.front();
+        removedRowsStack.pop_front();
         vector<bool> *aux = matrix[row];
         matrix[row] = matrix[nRows];
         matrix[nRows] = aux;
         nRows++;
     }
-    removedRowsStack.pop_front();
+    nRemovedRows = nRemovedRowsStack.front();
+    nRemovedRowsStack.pop_front();
 
-    for(const int &col : removedColumnsStack.front()){
+    for(int i = 0; i < nRemovedColumns; i++){
+        int col = removedColumnsStack.front();
+        removedColumnsStack.pop_front();
         int aux = idx[col];
         idx[col] = idx[nColumns];
         idx[nColumns] = aux;
         nColumns++;
     }
-    removedColumnsStack.pop_front();
+    nRemovedColumns = nRemovedColumnsStack.front();
+    nRemovedColumnsStack.pop_front();
+}
+
+void Matrix::setColumnSelectionCriteria(int c)
+{
+    colSelectCriteria = c;
 }
 
 void Matrix::print() const
@@ -203,11 +218,31 @@ Matrix::~Matrix()
     delete [] matrix;
 }
 
+int Matrix::selectFirst() const
+{
+    return 0;
+}
+
+int Matrix::selectRandom() const
+{
+
+}
+
+int Matrix::selectMaxOnes() const
+{
+
+}
+
+vector<bool>::reference Matrix::mat(int row, int col)
+{
+    return (*(matrix[row]))[idx[col]];
+}
+
 int Matrix::essentialColumn(int row){
     int nImp = 0;
     int selectedCol = -1;
     for(int col = 0; nImp <= 1 && col < nColumns ; col++){
-        if((*(matrix[row]))[idx[col]]){
+        if(mat(row,col)){
             nImp++;
             selectedCol = col;
         }
@@ -217,14 +252,14 @@ int Matrix::essentialColumn(int row){
 
 bool Matrix::columnDominance(int i, int j){
     for(int row = 0; row < nRows; row++)
-        if((*(matrix[row]))[idx[j]] && !(*(matrix[row]))[idx[i]])
+        if(mat(row,j) && !mat(row,i))
             return false;
     return true;
 }
 
 bool Matrix::rowDominance(int i, int j){
     for(int col = 0; col < nColumns; col++)
-        if((*(matrix[j]))[idx[col]] && !(*(matrix[i]))[idx[col]])
+        if(mat(j,col) && !mat(i,col))
             return false;
     return true;
 }
