@@ -4,6 +4,8 @@
 #include <boost/dynamic_bitset.hpp> //sudo apt install libboost1.55-all-dev
 #include <list>
 #include <set>
+#include <string>
+
 #include "implicant.h"
 
 using namespace boost;
@@ -23,35 +25,39 @@ private:
     list<int> nRemovedColumnsStack;
     int nRemovedColumns;
 
-    int colSelectCriteria;
+
     int selectFirst() const;
-    int selectRandom() const;
+    int selectRandom(std::default_random_engine &rnd_eng) const;
     int selectMaxOnes() const;
     int selectMinOnes() const;
 
     inline vector<bool>::reference mat(int row, int col);
+    inline vector<bool>::const_reference const_mat(int row, int col) const;
 
     int essentialColumn(int row);
     bool columnDominance(int i, int j);
     bool rowDominance(int i, int j);
 
-    const static int FIRST = 0;
-    const static int RANDOM = 1;
-    const static int MAX_ONES = 2;
-    const static int MIN_ONES = 3;
 
 public:
+
+    static int colSelectCriteria;
+
+    static const int FIRST = 0;
+    static const int RANDOM = 1;
+    static const int MAX_ONES = 2;
+    static const int MIN_ONES = 3;
+
     Matrix(bool ** vals, int nRow, int nCol);
     Matrix(const list<Implicant> &minterms, const set<Implicant> &idx);
     void reduce(dynamic_bitset<> &x);
-    int selectBranchingColumn() const;
+    int selectBranchingColumn(std::default_random_engine &rnd_eng) const;
     void removeRow(int row);
     int removeColumn(int col);
     int removeColumnAndRows(int col);
     bool empty() const;
     void saveState();
     void restoreState();
-    void setColumnSelectionCriteria(int c);
     void print() const;
     ~Matrix();
 };

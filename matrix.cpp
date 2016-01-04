@@ -1,7 +1,8 @@
 #include "matrix.h"
-
 #include <boost/range/adaptor/reversed.hpp>
 #include <set>
+
+int Matrix::colSelectCriteria = FIRST;
 
 Matrix::Matrix(bool **vals, int nRow, int nCol)
 {
@@ -19,8 +20,6 @@ Matrix::Matrix(bool **vals, int nRow, int nCol)
 
     nRemovedRows = 0;
     nRemovedColumns = 0;
-
-    colSelectCriteria = FIRST;
 }
 
 Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants)
@@ -45,8 +44,6 @@ Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants
 
     nRemovedRows = 0;
     nRemovedColumns = 0;
-
-    colSelectCriteria = FIRST;
 }
 
 void Matrix::reduce(dynamic_bitset<> &x)
@@ -106,7 +103,7 @@ void Matrix::reduce(dynamic_bitset<> &x)
 
 }
 
-int Matrix::selectBranchingColumn() const
+int Matrix::selectBranchingColumn(std::default_random_engine &rnd_eng) const
 {
     switch(colSelectCriteria){
         case MAX_ONES:
@@ -114,7 +111,7 @@ int Matrix::selectBranchingColumn() const
         case MIN_ONES:
             return selectMinOnes();
         case RANDOM:
-            return selectRandom();
+            return selectRandom(rnd_eng);
         case FIRST:
         default:
             return selectFirst();
@@ -193,11 +190,6 @@ void Matrix::restoreState()
     nRemovedColumnsStack.pop_front();
 }
 
-void Matrix::setColumnSelectionCriteria(int c)
-{
-    colSelectCriteria = c;
-}
-
 void Matrix::print() const
 {
     for(int j = 0; j < nColumns; j++)
@@ -205,7 +197,7 @@ void Matrix::print() const
     cout << endl << endl;
     for(int i = 0; i < nRows; i++){
         for(int j = 0; j < nColumns; j++)
-            cout << ((*(matrix[i]))[idx[j]] ? 1 : 0) << " ";
+            cout << (const_mat(i,j) ? 1 : 0) << " ";
         cout << endl;
     }
 }
@@ -223,17 +215,54 @@ int Matrix::selectFirst() const
     return 0;
 }
 
-int Matrix::selectRandom() const
+int Matrix::selectRandom(std::default_random_engine &rnd_eng) const
 {
-
+    std::uniform_int_distribution<int> uir(0, nColumns-1);
+    return uir(rnd_eng);
 }
 
 int Matrix::selectMaxOnes() const
 {
+    int maxCol = 0;
+    int maxOnes = 0;
+    for(int col = 0; col < nColumns; col++){
+        int nOnes = 0;
+        for(int row = 0; row < nRows; row++){
+            if(const_mat(row,col))
+                nOnes++;
+        }
+        if(nOnes > maxOnes){
+            maxOnes = nOnes;
+            maxCol = col;
+        }
+    }
+    return maxCol;
+}
 
+int Matrix::selectMinOnes() const
+{
+    int minCol = 0;
+    int minOnes = nRows;
+    for(int col = 0; col < nColumns; col++){
+        int nOnes = 0;
+        for(int row = 0; row < nRows; row++){
+            if(const_mat(row,col))
+                nOnes++;
+        }
+        if(nOnes < minOnes){
+            minOnes = nOnes;
+            minCol = col;
+        }
+    }
+    return minCol;
 }
 
 vector<bool>::reference Matrix::mat(int row, int col)
+{
+    return (*(matrix[row]))[idx[col]];
+}
+
+vector<bool>::const_reference Matrix::const_mat(int row, int col) const
 {
     return (*(matrix[row]))[idx[col]];
 }

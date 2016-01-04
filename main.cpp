@@ -13,6 +13,7 @@
 
 using namespace std;
 using namespace boost;
+namespace po = boost::program_options;
 
 void printTable(set<Implicant> ** table, int nVars){
     for(int col = 0; col <= nVars; col++){
@@ -91,8 +92,11 @@ list<Implicant> iteratedConsensus(const list<Implicant> implicants){
             Implicant consensus = Implicant::consensus(*it1,*it2);
             if(consensus.isValid()){
                 prime.push_back(consensus);
-                if(consensus.covers(*it2))
+                if(consensus.covers(*it2)){
                     prime.erase(it2++);
+                    list<Implicant>::iterator it3 = it1;
+                    it3++;
+                }
                 if(consensus.covers(*it1)){
                     prime.erase(it1++);
                     break;
@@ -103,6 +107,7 @@ list<Implicant> iteratedConsensus(const list<Implicant> implicants){
         if(it1==it2) it1++;
     }
 }
+
 
 list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
     list<Implicant> prime = implicants;
@@ -134,37 +139,47 @@ list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
  * x: partial solution
  * b: best solution found until the moment
  */
-dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b){
+dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b, std::default_random_engine & rnd_eng){
     int c;
 
     A->reduce(x); //Reduce the matrix using essentials and dominance
     if(x.count() >= b.count()) return b; //Bound
     if(A->empty()) return x; //Solution completed
 
-    c = A->selectBranchingColumn();
+    c = A->selectBranchingColumn(rnd_eng);
     A->saveState();
     x.set(A->removeColumnAndRows(c)); //Include implicant of column c to the solution
-    dynamic_bitset<> x2 = exactCover(A,x,b); //Branch
+    dynamic_bitset<> x2 = exactCover(A,x,b,rnd_eng); //Branch
     A->restoreState();
     if(x2.count() < b.count()) b = x2;
 
     A->saveState();
     x.reset(A->removeColumn(c)); //Exclude implicant of column c to the solution
-    x2 = exactCover(A,x,b); //Branch
+    x2 = exactCover(A,x,b,rnd_eng); //Branch
     A->restoreState();
     if(x2.count() < b.count()) b = x2;
 
     return b;
 }
 
-void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result){
+void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result, std::default_random_engine & rnd_eng,
+                    double *prime_time, double *cover_time){
+
+    //Prime implicants computation
+    clock_t initemps=clock();
+
     set<Implicant> prime;
     tabularMethod(minterms,prime);
+
+    *prime_time = (clock()-initemps)/(double)CLOCKS_PER_SEC;
+
+    //Minimum cover computation
+    initemps=clock();
 
     dynamic_bitset <>x(prime.size()); x.reset();
     dynamic_bitset <>b(prime.size()); b.set();
     Matrix * m = new Matrix(minterms,prime);
-    dynamic_bitset <>minset = exactCover(m,x,b);
+    dynamic_bitset <>minset = exactCover(m,x,b,rnd_eng);
     delete m;
 
     int i = 0;
@@ -173,6 +188,8 @@ void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result){
             result.push_back(im);
         i++;
     }
+
+    *cover_time = (clock()-initemps)/(double)CLOCKS_PER_SEC;
 }
 
 void generateUniformRandom(int nvars, double q, default_random_engine &rnd_eng, list<Implicant> &minterms){
@@ -200,144 +217,134 @@ bool verifyResult(const list<Implicant> minterms, const list<Implicant> implican
     return true;
 }*/
 
-void experiments1(int argc, char ** argv){
-    std::default_random_engine rnd_eng(1234);
-
-    double fraction = 0.3;
-    int min_nvars = 4;
-    int max_nvars = 10;
-    int nreps = 5;
-
-    for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
-        double runtime = 0;
-
-        for(int rep = 0; rep < nreps; rep++){
-            list<Implicant> minterms;
-            list<Implicant> result;
-            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
-
-            clock_t initemps=clock();
-            QuineMcCluskey(minterms,result);
-            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
-
-        }
-        cout << nvars << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
-    }
-}
-
-void experiments11(int argc, char ** argv){
-    std::default_random_engine rnd_eng(123);
-
-    double fraction = 0.3;
-    int min_nvars = 4;
-    int max_nvars = 10;
-    int nreps = 5;
-
-    for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
-        double runtime = 0;
-
-        for(int rep = 0; rep < nreps; rep++){
-            list<Implicant> minterms;
-            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
-            clock_t initemps=clock();
-            set<Implicant> prime;
-
-            tabularMethod(minterms,prime);
-            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
-
-        }
-        cout << nvars << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
-    }
-}
-
-void experiments2(int argc, char ** argv){
-    std::default_random_engine rnd_eng(1234);
-
-    double min_fraction = 0.05;
-    double max_fraction = 0.85;
-    int nvars = 8;
-    int nreps = 5;
-
-    for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
-        double runtime = 0;
-        for(int rep = 0; rep < nreps; rep++){
-            list<Implicant> minterms;
-            list<Implicant> result;
-            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
-            clock_t initemps=clock();
-            QuineMcCluskey(minterms,result);
-            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
-        }
-        cout << fraction << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
-    }
-}
-void experiments22(int argc, char ** argv){
-    std::default_random_engine rnd_eng(1234);
-
-    double min_fraction = 0.05;
-    double max_fraction = 0.85;
-    int nvars = 8;
-    int nreps = 5;
-
-    for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
-        double runtime = 0;
-        for(int rep = 0; rep < nreps; rep++){
-            list<Implicant> minterms;
-            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
-            clock_t initemps=clock();
-            set<Implicant> prime;
-
-            tabularMethod(minterms,prime);
-            runtime += (clock()-initemps)/(double)CLOCKS_PER_SEC;
-        }
-        cout << fraction << ";" << (1<<nvars)*fraction << ";" << runtime/nreps << endl;
-    }
-}
-
-void experiments3(int argc, char ** argv){
-    std::default_random_engine rnd_eng(1234);
-
+void runIncProb(int nvars, int nreps, int seed){
+    std::default_random_engine rnd_eng(seed);
     double min_fraction = 0.05;
     double max_fraction = 1.01;
-    int nvars = 6;
-    int nreps = 10;
+
+    double *prime_time = new double(0);
+    double *cover_time = new double(0);
+    cout << "prob ; n minterms ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
 
     for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
-        double nimp = 0;
+        double sum_prime_time = 0;
+        double sum_cover_time = 0;
+        double sum_sizes = 0;
+
         for(int rep = 0; rep < nreps; rep++){
             list<Implicant> minterms;
             list<Implicant> result;
             generateUniformRandom(nvars,fraction,rnd_eng,minterms);
-            QuineMcCluskey(minterms,result);
-            cout << minterms.size() << endl;
-            cout << result.size() << endl;
-            //cout << result.front() << endl;
-            nimp+=result.size();
+
+            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time);
+            sum_prime_time += *prime_time;
+            sum_cover_time += *cover_time;
+            sum_sizes += result.size();
         }
-        cout << fraction << ";" << (1<<nvars)*fraction << ";" << nimp/nreps << endl;
+        cout << fraction << " ; ";
+        cout << (1<<nvars)*fraction << " ; ";
+        cout << sum_prime_time/nreps << " ; ";
+        cout << sum_cover_time/nreps << " ; ";
+        cout << sum_prime_time/nreps + sum_cover_time/nreps<< " ; ";
+        cout << sum_sizes / nreps << endl;
     }
+
+    delete prime_time;
+    delete cover_time;
+}
+
+void runIncVars(double fraction, int nreps, int seed){
+    std::default_random_engine rnd_eng(seed);
+
+    int min_nvars = 4;
+    int max_nvars = 10;
+
+    double *prime_time = new double(0);
+    double *cover_time = new double(0);
+    cout << "nvars ; n minterms ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
+
+    for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
+        double sum_prime_time = 0;
+        double sum_cover_time = 0;
+        double sum_sizes = 0;
+
+        for(int rep = 0; rep < nreps; rep++){
+            list<Implicant> minterms;
+            list<Implicant> result;
+            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+
+            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time);
+            sum_prime_time += *prime_time;
+            sum_cover_time += *cover_time;
+            sum_sizes += result.size();
+        }
+        cout << nvars << " ; ";
+        cout << (1<<nvars)*fraction << " ; ";
+        cout << sum_prime_time/nreps << " ; ";
+        cout << sum_cover_time/nreps << " ; ";
+        cout << sum_prime_time/nreps + sum_cover_time/nreps<< " ; ";
+        cout << sum_sizes / nreps << endl;
+    }
+
+    delete prime_time;
+    delete cover_time;
+}
+
+void runSingle(int nvars, double fraction, int nreps, int seed){
+    std::default_random_engine rnd_eng(seed);
+
+    double *prime_time = new double(0);
+    double *cover_time = new double(0);
+
+    double sum_prime_time = 0;
+    double sum_cover_time = 0;
+    double sum_sizes = 0;
+    for(int rep = 0; rep < nreps; rep++){
+        list<Implicant> minterms;
+        list<Implicant> result;
+        generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+        QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time);
+        sum_prime_time += *prime_time;
+        sum_cover_time += *cover_time;
+        sum_sizes += result.size();
+    }
+    cout << "N minterms = " << (1<<nvars)*fraction << endl;
+    cout << "Primes computation time = " << sum_prime_time/nreps << endl;
+    cout << "Min cover computation time = " << sum_cover_time/nreps << endl;
+    cout << "Total computation time = " << sum_prime_time/nreps + sum_cover_time/nreps << endl;
+    cout << "Min cover size = " << sum_sizes/nreps << endl;
+
+    delete prime_time;
+    delete cover_time;
 }
 
 int main (int argc, char ** argv) {
 
+    int n;
+    double p;
+    int seed = 0;
+    int r = 1;
+    string b = "first";
+    string e = "single";
+
     // Parse input arguments for options
-    /*// http://www.boost.org/doc/libs/1_41_0/doc/html/program_options/tutorial.html
+    // http://www.boost.org/doc/libs/1_41_0/doc/html/program_options/tutorial.html
     po::options_description desc("Allowed options");
     desc.add_options()
-        ("help", "produce help message")
-        ("n", po::value<double>(), "number of variables")
-        ("seed,s", po::value<int>(), "random seed")
-        ("width,w", po::value<int>(), "width of the lattice (only for lattice graphs)")
-        ("height,h", po::value<int>(), "height of the lattice (only for lattice graphs)")
-        ("p0", po::value<float>(), "fraction of initially infected nodes")
-        ("p", po::value<float>(), "connection probability in Erdos-Renyi graph")
-        ("n,n", po::value<int>(), "number of nodes (for non-lattice graphs)")
-        ("beta", po::value<double>(), "probability of infecting each neighbour at a time")
-        ("gamma", po::value<double>(), "probability of recovering at a time"
-         "vertex")
-        ("tmax,t", po::value<int>(), "amount of time of simulation")
-        ("model,m", po::value<string>(), "tye of graph: "
-         "complete, lattice, star, er, tree")
+        ("help,h", "produce help message")
+        ("seed,s",po::value<int>(), "seed of the random generator. DEFAULT 0")
+        ("numvar,n", po::value<int>(), "number of variables of the minterms (only for 'single' and 'incprob')")
+        ("prob,p", po::value<double>(), "probability for a minterm of being in the formula (only for 'single' and 'incvars')")
+        ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1")
+        ("branch,b", po::value<string>(), "selection strategy of the branching column"
+         "\nfirst: first column. DEFAULT"
+         "\nrandom: random column"
+         "\nmax: column with maximum number of 1s"
+         "\nmin: column with minimum number of 1s")
+        ("execution,e", po::value<string>(), "type of execution"
+         "\nsingle: average of 'r' executions for defined 'n' and 'p'. DEFAULT"
+         "\nincvars: average of 'r' repetitions for defined 'p', and 'n'' from 5 to 12"
+         "\nincprob: average of 5 repetitions for defined 'n', and 'p'' from 0.05 to 1 step 0.05")
     ;
 
     po::variables_map vm;
@@ -349,31 +356,27 @@ int main (int argc, char ** argv) {
         return 1;
     }
 
+    if(vm.count("seed")) seed = vm["seed"].as<int>();
+    if(vm.count("numvar")) n = vm["numvar"].as<int>();
+    if(vm.count("prob")) p = vm["prob"].as<double>();
+    if(vm.count("reps")) r = vm["reps"].as<int>();
+    if(vm.count("branch")) b = vm["branch"].as<string>();
+    if(vm.count("execution")) e = vm["execution"].as<string>();
 
-    if (vm.count("seed")) seed = vm["seed"].as<int>();
-    if (vm.count("p0")) p0 = vm["p0"].as<float>();
-    if (vm.count("p")) p_er = vm["p"].as<float>();
-    if (vm.count("tmax")) tmax = vm["tmax"].as<int>();
-    if (vm.count("n")) n = vm["n"].as<int>();
-    if (vm.count("width")) w = vm["width"].as<int>();
-    if (vm.count("height")) h = vm["height"].as<int>();
-    if (vm.count("model")) model = vm["model"].as<string>();
-    if (vm.count("beta")) beta = vm["beta"].as<double>();
-    if (vm.count("gamma")) gamma = vm["gamma"].as<double>();
-
+    if(b == "random") Matrix::colSelectCriteria = Matrix::RANDOM;
+    else if(b=="max") Matrix::colSelectCriteria = Matrix::MAX_ONES;
+    else if(b=="min") Matrix::colSelectCriteria = Matrix::MIN_ONES;
+    else Matrix::colSelectCriteria = Matrix::FIRST;
 
     //Check errors
-    if(model == "lattice" && (!vm.count("width") || !vm.count("height")) ){
-        cout << "w and h must be specifiec for lattice graph" << endl;
-        return -1;
-    }
-    if(model != "lattice" && !vm.count("n")){
-        cout << "n must be specifiec for " << model << " graph" << endl;
-        return -1;
-    }
-*/
-    //experiments3(argc,argv);
+    if(e == "incprob")
+        runIncProb(n,r,seed);
+    else if(e == "incvars")
+        runIncVars(p,r,seed);
+    else
+        runSingle(n,p,r,seed);
 
+/*
     ifstream input;
     string instance("instances/test.txt");
 
@@ -388,14 +391,14 @@ int main (int argc, char ** argv) {
     input.close();
 
     list<Implicant> result;
-    QuineMcCluskey(minterms,result);
+    //QuineMcCluskey(minterms,result);
 
     ofstream output;
     output.open(instance + ".res");
     for(const Implicant & im : result)
         output << im << endl;
     output.close();
-
+*/
 
     /*input.open("instances/testmatriu.txt");
 
