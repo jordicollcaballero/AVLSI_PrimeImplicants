@@ -83,54 +83,30 @@ list<Implicant> iteratedConsensus(const list<Implicant> implicants){
         }
         if(it1==it2) it1++;
     }
-
     it1 = prime.begin();
     it1++;
     while(it1!=prime.end()){
         list<Implicant>::iterator it2 = prime.begin();
+        const Implicant & imp1 = *it1;
         while(it2!=it1){
-            Implicant consensus = Implicant::consensus(*it1,*it2);
+            const Implicant & imp2 = *it2;
+            Implicant consensus = Implicant::consensus(imp1,imp2);
             if(consensus.isValid()){
+                list<Implicant>::iterator it3 = prime.begin();
+                while(it3 != prime.end()){
+                    if(consensus.covers(*it3)){
+                        if(it3 == it1) it1--;
+                        if(it3 == it2) it2--;
+                        it3 = prime.erase(it3);
+                    }
+                    else
+                        it3++;
+                }
                 prime.push_back(consensus);
-                if(consensus.covers(*it2)){
-                    prime.erase(it2++);
-                    list<Implicant>::iterator it3 = it1;
-                    it3++;
-                }
-                if(consensus.covers(*it1)){
-                    prime.erase(it1++);
-                    break;
-                }
             }
             it2++;
         }
-        if(it1==it2) it1++;
-    }
-}
-
-
-list<Implicant> iteratedConsensus2(const list<Implicant> implicants){
-    list<Implicant> prime = implicants;
-    list<Implicant>::iterator it1 = prime.begin();
-    it1++;
-    while(it1!=prime.end()){
-        list<Implicant>::iterator it2 = prime.begin();
-        while(it2!=it1){
-            if((*it1).covers(*it2)){
-                prime.erase(it2++);
-            }
-            else if((*it2).covers(*it1)){
-                prime.erase(it1++);
-                break;
-            }
-            else{
-                Implicant consensus = Implicant::consensus(*it1,*it2);
-                if(consensus.isValid())
-                    prime.push_back(consensus);
-                it2++;
-            }
-        }
-        if(it1==it2) it1++;
+        it1++;
     }
 }
 
