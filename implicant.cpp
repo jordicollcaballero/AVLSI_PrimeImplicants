@@ -13,26 +13,37 @@ Implicant::Implicant(const Implicant &i)
     mask = i.mask;
     variables = i.variables;
     valid = i.valid;
+    dontcare = i.dontcare;
 }
 
-Implicant::Implicant(const dynamic_bitset<> &mask, const dynamic_bitset<> &variables)
+Implicant::Implicant(const dynamic_bitset<> &mask, const dynamic_bitset<> &variables, bool dontcare)
 {
     this->mask = mask;
     this->variables = variables;
-    valid = true;
+    this->valid = true;
+    this->dontcare = dontcare;
 }
 
 Implicant::Implicant(const string &s)
 {
-    mask = dynamic_bitset<>(s.size());
-    variables = dynamic_bitset<>(s.size());
+    int nvars;
+    if(s.back() == 'd'){
+        dontcare = true;
+        nvars = s.size()-1;
+    }
+    else{
+        dontcare = false;
+        nvars = s.size();
+    }
+    mask = dynamic_bitset<>(nvars);
+    variables = dynamic_bitset<>(nvars);
     int i = 0;
     for(const char& c : s) {
         if(c=='x'){
             mask[i]=0;
             variables[i]=0;
         }
-        else{
+        else if(c!='d'){
             mask[i] = 1;
             variables[i] = c=='1' ? 1 : 0;
         }
@@ -44,6 +55,11 @@ Implicant::Implicant(const string &s)
 int Implicant::getNVars() const
 {
     return mask.size();
+}
+
+bool Implicant::isDontCare() const
+{
+    return dontcare;
 }
 
 int Implicant::countNegatedVars() const
@@ -90,6 +106,7 @@ Implicant Implicant::distance1Merging(const Implicant &i1, const Implicant &i2){
             int uncommonVar = uncommonVariables.find_first();
             i.mask[uncommonVar]=false;
             i.variables[uncommonVar]=false;
+            i.dontcare = i1.dontcare && i2.dontcare;
         }
         else
             i.valid = false;
@@ -112,6 +129,7 @@ Implicant Implicant::consensus(const Implicant &i1, const Implicant &i2){
         i.mask[uncommonVar]=false;
         i.variables[uncommonVar]=false;
         i.valid = true;
+        i.dontcare = i1.dontcare && i2.dontcare;
     }
     else
         i.valid = false;

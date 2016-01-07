@@ -38,17 +38,20 @@ void printList(const list<Implicant> & primes){
     cout << endl;
 }
 
-void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
-    if(minterms.size() == 0)
+void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Implicant> &implicants){
+    if(f.size() == 0)
         return;
-    int nVars = minterms.front().getNVars();
+    set<Implicant> implicantsset;
+    int nVars = f.front().getNVars();
     set<Implicant> ** table = new set<Implicant> * [nVars+1];
     for(int i = 0; i <= nVars; i++)
         table[i] = new set<Implicant> [nVars-i+1];
-    for(const Implicant& im : minterms){
+    for(const Implicant& im : f){
         table[0][im.countNegatedVars()].insert(im);
-        implicants.insert(im);
+        implicantsset.insert(im);
     }
+    for(const Implicant& im : d)
+        table[0][im.countNegatedVars()].insert(im);
 
     for(int col = 0; col < nVars; col++){
         for(int row = 0; row < nVars-col; row++){
@@ -57,16 +60,16 @@ void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
                     Implicant consensus = Implicant::distance1Merging(im1,im2);
                     if(consensus.isValid()){
                         table[col+1][row].insert(consensus);
-                        implicants.insert(consensus);
-                        implicants.erase(im1);
-                        implicants.erase(im2);
+                        if(!consensus.isDontCare()) implicantsset.insert(consensus);
+                        if(!im1.isDontCare()) implicantsset.erase(im1);
+                        if(!im2.isDontCare()) implicantsset.erase(im2);
                     }
                 }
             }
         }
     }
 
-    //printTable(table, nVars);
+    implicants.insert(implicantset.begin(),implicantset.end());
 
     for(int i = 0; i <= nVars; i++)
         delete [] table[i];
@@ -74,11 +77,12 @@ void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
 }
 
 
-void iteratedConsensus(const list<Implicant> implicants, list<Implicant> & prime){
-    if(implicants.empty())
+void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> & prime){
+    if(f.empty())
         return;
 
-    prime = implicants;
+    prime = f;
+    prime.insert(d.begin(),d.end());
     list<Implicant>::iterator it1 = prime.begin();
     it1++;
     while(it1!=prime.end()){
@@ -132,6 +136,13 @@ void iteratedConsensus(const list<Implicant> implicants, list<Implicant> & prime
             it2++;
         }
         if(!it1displaced)it1++;
+    }
+
+    it1 = prime.begin();
+    while(it1!=prime.end()){
+        if((*it1).isDontCare())
+            it1 = prime.erase(it1);
+        else it1++;
     }
 }
 

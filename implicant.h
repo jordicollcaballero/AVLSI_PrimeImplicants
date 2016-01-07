@@ -14,13 +14,15 @@ private:
     dynamic_bitset<> mask;
     dynamic_bitset<> variables;
     bool valid;
+    bool dontcare;
 
 public:
     Implicant();
     Implicant(const Implicant &i);
     Implicant(const string &s);
-    Implicant(const dynamic_bitset<> &mask, const dynamic_bitset<> &variables);
+    Implicant(const dynamic_bitset<> &mask, const dynamic_bitset<> &variables, bool dontcare=false);
     int getNVars() const;
+    bool isDontCare() const;
     int countNegatedVars() const;
     bool covers(const Implicant &i) const;
     bool isValid() const;
