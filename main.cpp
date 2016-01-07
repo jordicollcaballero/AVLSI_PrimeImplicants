@@ -15,6 +15,8 @@ using namespace std;
 using namespace boost;
 namespace po = boost::program_options;
 
+void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> cover);
+
 void printTable(set<Implicant> ** table, int nVars){
     for(int col = 0; col <= nVars; col++){
         cout << "n var in literal = " << nVars-col << endl;
@@ -162,13 +164,20 @@ dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b, s
 }
 
 void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result, std::default_random_engine & rnd_eng,
-                    double *prime_time, double *cover_time){
+                    double *prime_time, double *cover_time, bool tabular){
 
     //Prime implicants computation
     clock_t initemps=clock();
 
     set<Implicant> prime;
-    tabularMethod(minterms,prime);
+    if(tabular){
+        tabularMethod(minterms,prime);
+    }
+    else{
+        list<Implicant> primelist;
+        iteratedConsensus(minterms,primelist);
+        prime.insert(primelist.begin(),primelist.end());
+    }
 
     *prime_time = (clock()-initemps)/(double)CLOCKS_PER_SEC;
 
@@ -200,23 +209,7 @@ void generateUniformRandom(int nvars, double q, default_random_engine &rnd_eng, 
     }
 }
 
-/*
-bool verifyResult(const list<Implicant> minterms, const list<Implicant> implicants){
-    set<Implicant> mintermsset;
-    for(const Implicant & min : minterms)
-        mintermsset.insert(min);
-    for(const Implicant & im : implicants){
-        for(const Implicant &min : im.getImplicants()){
-            if(mintermsset.find(min) == mintermsset.end() && im.covers(min))
-                return false;
-            else if(mintermsset.find(min) != mintermsset.end() && !im.covers(min))
-                return false;
-        }
-    }
-    return true;
-}*/
-
-void runIncProb(int nvars, int nreps, int seed){
+void runIncProb(int nvars, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
     double min_fraction = 0.05;
     double max_fraction = 1.01;
@@ -235,7 +228,7 @@ void runIncProb(int nvars, int nreps, int seed){
             list<Implicant> result;
             generateUniformRandom(nvars,fraction,rnd_eng,minterms);
 
-            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time);
+            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time, tabular);
             sum_prime_time += *prime_time;
             sum_cover_time += *cover_time;
             sum_sizes += result.size();
@@ -252,7 +245,7 @@ void runIncProb(int nvars, int nreps, int seed){
     delete cover_time;
 }
 
-void runIncVars(double fraction, int nreps, int seed){
+void runIncVars(double fraction, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
 
     int min_nvars = 4;
@@ -272,7 +265,7 @@ void runIncVars(double fraction, int nreps, int seed){
             list<Implicant> result;
             generateUniformRandom(nvars,fraction,rnd_eng,minterms);
 
-            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time);
+            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time, tabular);
             sum_prime_time += *prime_time;
             sum_cover_time += *cover_time;
             sum_sizes += result.size();
@@ -289,7 +282,7 @@ void runIncVars(double fraction, int nreps, int seed){
     delete cover_time;
 }
 
-void runSingle(int nvars, double fraction, int nreps, int seed){
+void runSingle(int nvars, double fraction, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
 
     double *prime_time = new double(0);
@@ -302,10 +295,11 @@ void runSingle(int nvars, double fraction, int nreps, int seed){
         list<Implicant> minterms;
         list<Implicant> result;
         generateUniformRandom(nvars,fraction,rnd_eng,minterms);
-        QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time);
+        QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time, tabular);
         sum_prime_time += *prime_time;
         sum_cover_time += *cover_time;
         sum_sizes += result.size();
+        testResult(minterms,list<Implicant>(),result);
     }
     cout << "N minterms = " << (1<<nvars)*fraction << endl;
     cout << "Primes computation time = " << sum_prime_time/nreps << endl;
@@ -317,91 +311,71 @@ void runSingle(int nvars, double fraction, int nreps, int seed){
     delete cover_time;
 }
 
-void testTabularVsIterated(int nvars, int prob,int seed){
 
-        /*ifstream input;
-        string instance("instances/test.txt");
+void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> cover){
+    set<Implicant> fset; fset.insert(f.begin(),f.end());
+    set<Implicant> dset; dset.insert(d.begin(),d.end());
 
-        input.open(instance);
+    bool allCovered = true;
+    bool onlyNeededCovered = true;
+    int nvars = f.front().getNVars();
+    dynamic_bitset<> mask(nvars,(1<<nvars)-1);
 
-        string word;
-
-        list<Implicant> minterms;
-        while(input >> word)
-            minterms.push_back(Implicant(word));
-
-        input.close();*/
-
-        list<Implicant> minterms;
-        std::default_random_engine rnd_eng(seed);
-        generateUniformRandom(nvars,prob,rnd_eng,minterms);
-
-        set<Implicant> primesTabular;
-        tabularMethod(minterms,primesTabular);
-        cout << "With tabular method: " << primesTabular.size() << " prime implicants" << endl;
-        for(const Implicant & im : primesTabular)
-            cout << im << endl;
-        cout << endl;
-
-        list<Implicant> primesConsensus;
-        iteratedConsensus(minterms,primesConsensus);
-        primesConsensus.sort();
-        cout << "With iterated consensus: " << primesConsensus.size() << " prime implicants" << endl;
-        for(const Implicant & im : primesConsensus)
-            cout << im << endl;
-        cout << endl;
-
-     /*   ofstream output;
-        output.open(instance + ".res");
-        for(const Implicant & im : result)
-            output << im << endl;
-        output.close();
-    */
-
-        /*input.open("instances/testmatriu.txt");
-
-        int nRow, nCol, val;
-        input >> nRow >> nCol;
-
-        bool ** mat = new bool *[nRow];
-        for(int i = 0; i < nRow; i++){
-            mat[i] = new bool[nCol];
-            for(int j = 0; j < nCol; j++){
-                input >> val;
-                mat[i][j] = val ? true : false;
+    for(int i = 0; i < 1<<nvars; i++){
+        Implicant im1(Implicant(mask,dynamic_bitset<> (nvars,i)));
+        if(fset.find(im1)!=fset.end()){
+            bool covered = false;
+            for(const Implicant & im2 : cover){
+                if(im2.covers(im1)){
+                    covered = true;
+                    break;
+                }
             }
+            if(!covered) allCovered = false;
         }
+        else if(dset.find(im1)== dset.end()){
+            bool covered = false;
+            for(const Implicant & im2 : cover){
+                if(im2.covers(im1)){
+                    covered = true;
+                    break;
+                }
+            }
+            if(covered) onlyNeededCovered = false;
+        }
+    }
+    cout << "All the function is covered: " << (allCovered ? "yes" : "no") << endl;
+    cout << "Only the function and don't care set are covered: " << (onlyNeededCovered ? "yes" : "no") << endl;
+}
 
+void testTabularVsIterated(int nvars, double prob,int seed){
 
-        Matrix m(mat,nRow,nCol);
-        m.saveState();
-        m.print();
-        dynamic_bitset <>x(nCol); x.reset();
-        //m.reduce(x);
-        m.removeColumnAndRows(9);
-        m.print();
-        //cout << endl << endl << x << endl;
-        m.restoreState();
-        m.print();*/
-    /*
-        std::default_random_engine rnd_eng(1234);
-        double fraction = 0.3;
-        int nvars = 10;
-        int nminterms = (int)((1<<nvars)*fraction);
+    list<Implicant> minterms;
+    std::default_random_engine rnd_eng(seed);
+    generateUniformRandom(nvars,prob,rnd_eng,minterms);
 
-        generateBinomialRandom(nvars,fraction,rnd_eng);
-        */
+    set<Implicant> primesTabular;
+    tabularMethod(minterms,primesTabular);
+    cout << "With tabular method: " << primesTabular.size() << " prime implicants" << endl;
+    for(const Implicant & im : primesTabular)
+        cout << im << endl;
+    cout << endl;
+
+    list<Implicant> primesConsensus;
+    iteratedConsensus(minterms,primesConsensus);
+    primesConsensus.sort();
+    cout << "With iterated consensus: " << primesConsensus.size() << " prime implicants" << endl;
+    for(const Implicant & im : primesConsensus)
+        cout << im << endl;
+    cout << endl;
 }
 
 int main (int argc, char ** argv) {
-
-    auxMain();
-    return 0;
-
     int n;
     double p;
     int seed = 0;
     int r = 1;
+    string a = "tabular";
     string b = "first";
     string e = "single";
 
@@ -414,6 +388,9 @@ int main (int argc, char ** argv) {
         ("numvar,n", po::value<int>(), "number of variables of the minterms. Required in: single, incprob")
         ("prob,p", po::value<double>(), "probability for a minterm of being in the formula. Required in: single, incvars")
         ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1. Used in: single, nincvars, nincprob")
+        ("primealg,a", po::value<string>(), "algorithm for computing prime implicants"
+         "\ntabular: tabular method. DEFAULT"
+         "\niterated: iterated consensus")
         ("branch,b", po::value<string>(), "selection strategy of the branching column. Used in: single, nincvars, nincprob."
          "\nfirst: first column. DEFAULT"
          "\nrandom: random column"
@@ -438,6 +415,7 @@ int main (int argc, char ** argv) {
     if(vm.count("numvar")) n = vm["numvar"].as<int>();
     if(vm.count("prob")) p = vm["prob"].as<double>();
     if(vm.count("reps")) r = vm["reps"].as<int>();
+    if(vm.count("primealg")) a = vm["primealg"].as<string>();
     if(vm.count("branch")) b = vm["branch"].as<string>();
     if(vm.count("execution")) e = vm["execution"].as<string>();
 
@@ -447,12 +425,65 @@ int main (int argc, char ** argv) {
     else Matrix::colSelectCriteria = Matrix::FIRST;
 
     if(e == "incprob")
-        runIncProb(n,r,seed);
+        runIncProb(n,r,seed,a == "iterated" ? false : true);
     else if(e == "incvars")
-        runIncVars(p,r,seed);
+        runIncVars(p,r,seed,a == "iterated" ? false : true);
     else
-        runSingle(n,p,r,seed);
+        runSingle(n,p,r,seed,a == "iterated" ? false : true);
 
     return 0;
 }
 
+/*ifstream input;
+string instance("instances/test.txt");
+
+input.open(instance);
+
+string word;
+
+list<Implicant> minterms;
+while(input >> word)
+    minterms.push_back(Implicant(word));
+
+input.close();*/
+
+/*   ofstream output;
+   output.open(instance + ".res");
+   for(const Implicant & im : result)
+       output << im << endl;
+   output.close();
+*/
+
+   /*input.open("instances/testmatriu.txt");
+
+   int nRow, nCol, val;
+   input >> nRow >> nCol;
+
+   bool ** mat = new bool *[nRow];
+   for(int i = 0; i < nRow; i++){
+       mat[i] = new bool[nCol];
+       for(int j = 0; j < nCol; j++){
+           input >> val;
+           mat[i][j] = val ? true : false;
+       }
+   }
+
+
+   Matrix m(mat,nRow,nCol);
+   m.saveState();
+   m.print();
+   dynamic_bitset <>x(nCol); x.reset();
+   //m.reduce(x);
+   m.removeColumnAndRows(9);
+   m.print();
+   //cout << endl << endl << x << endl;
+   m.restoreState();
+   m.print();*/
+/*
+   std::default_random_engine rnd_eng(1234);
+   double fraction = 0.3;
+   int nvars = 10;
+   int nminterms = (int)((1<<nvars)*fraction);
+
+   generateBinomialRandom(nvars,fraction,rnd_eng);
+   */
