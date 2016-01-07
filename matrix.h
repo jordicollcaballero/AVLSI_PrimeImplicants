@@ -49,7 +49,7 @@ public:
     static const int MIN_ONES = 3;
 
     Matrix(bool ** vals, int nRow, int nCol);
-    Matrix(const list<Implicant> &minterms, const set<Implicant> &idx);
+    Matrix(const list<Implicant> &f, const list<Implicant> &primes);
     void reduce(dynamic_bitset<> &x);
     int selectBranchingColumn(std::default_random_engine &rnd_eng) const;
     void removeRow(int row);

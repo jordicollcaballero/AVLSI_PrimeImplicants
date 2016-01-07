@@ -15,7 +15,7 @@ using namespace std;
 using namespace boost;
 namespace po = boost::program_options;
 
-void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> cover);
+void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> &cover);
 
 void printTable(set<Implicant> ** table, int nVars){
     for(int col = 0; col <= nVars; col++){
@@ -38,17 +38,17 @@ void printList(const list<Implicant> & primes){
     cout << endl;
 }
 
-void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Implicant> &implicants){
+void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Implicant> &primes){
     if(f.size() == 0)
         return;
-    set<Implicant> implicantsset;
+    set<Implicant> implicantset;
     int nVars = f.front().getNVars();
     set<Implicant> ** table = new set<Implicant> * [nVars+1];
     for(int i = 0; i <= nVars; i++)
         table[i] = new set<Implicant> [nVars-i+1];
     for(const Implicant& im : f){
         table[0][im.countNegatedVars()].insert(im);
-        implicantsset.insert(im);
+        implicantset.insert(im);
     }
     for(const Implicant& im : d)
         table[0][im.countNegatedVars()].insert(im);
@@ -60,16 +60,16 @@ void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Impli
                     Implicant consensus = Implicant::distance1Merging(im1,im2);
                     if(consensus.isValid()){
                         table[col+1][row].insert(consensus);
-                        if(!consensus.isDontCare()) implicantsset.insert(consensus);
-                        if(!im1.isDontCare()) implicantsset.erase(im1);
-                        if(!im2.isDontCare()) implicantsset.erase(im2);
+                        if(!consensus.isDontCare()) implicantset.insert(consensus);
+                        if(!im1.isDontCare()) implicantset.erase(im1);
+                        if(!im2.isDontCare()) implicantset.erase(im2);
                     }
                 }
             }
         }
     }
 
-    implicants.insert(implicantset.begin(),implicantset.end());
+    primes.insert(primes.end(),implicantset.begin(),implicantset.end());
 
     for(int i = 0; i <= nVars; i++)
         delete [] table[i];
@@ -77,22 +77,22 @@ void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Impli
 }
 
 
-void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> & prime){
+void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> & primes){
     if(f.empty())
         return;
 
-    prime = f;
-    prime.insert(d.begin(),d.end());
-    list<Implicant>::iterator it1 = prime.begin();
+    primes = f;
+    primes.insert(primes.end(),d.begin(),d.end());
+    list<Implicant>::iterator it1 = primes.begin();
     it1++;
-    while(it1!=prime.end()){
-        list<Implicant>::iterator it2 = prime.begin();
+    while(it1!=primes.end()){
+        list<Implicant>::iterator it2 = primes.begin();
         while(it2!=it1){
             if((*it1).covers(*it2)){
-                it2 = prime.erase(it2);
+                it2 = primes.erase(it2);
             }
             else if((*it2).covers(*it1)){
-                it1 = prime.erase(it1);
+                it1 = primes.erase(it1);
                 break;
             }
             else it2++;
@@ -100,21 +100,21 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
         if(it1==it2) it1++;
     }
 
-    it1 = prime.begin();
+    it1 = primes.begin();
     it1++;
-    while(it1!=prime.end()){
+    while(it1!=primes.end()){
         Implicant imp1 = *it1;
         bool it1displaced = false;
-        list<Implicant>::iterator it2 = prime.begin();
+        list<Implicant>::iterator it2 = primes.begin();
         while(it2!=it1){
             Implicant imp2 = *it2;
             Implicant consensus = Implicant::consensus(imp1,imp2);
             bool toAdd = true;
             bool it1deleted = false;
             if(consensus.isValid()){
-                list<Implicant>::iterator it3 = prime.begin();
+                list<Implicant>::iterator it3 = primes.begin();
 
-                while(it3 != prime.end()){
+                while(it3 != primes.end()){
                     if((*it3).covers(consensus)){
                         toAdd = false;
                         break;
@@ -126,11 +126,11 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
                             it1displaced = true;
                         }
                         if(it3 == it2) it2--;
-                        it3 = prime.erase(it3);
+                        it3 = primes.erase(it3);
                     }
                     else it3++;
                 }
-                if(toAdd) prime.push_back(consensus);
+                if(toAdd) primes.push_back(consensus);
             }
             if(it1deleted) it1++;
             it2++;
@@ -138,10 +138,10 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
         if(!it1displaced)it1++;
     }
 
-    it1 = prime.begin();
-    while(it1!=prime.end()){
+    it1 = primes.begin();
+    while(it1!=primes.end()){
         if((*it1).isDontCare())
-            it1 = prime.erase(it1);
+            it1 = primes.erase(it1);
         else it1++;
     }
 }
@@ -174,21 +174,17 @@ dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b, s
     return b;
 }
 
-void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result, std::default_random_engine & rnd_eng,
+void QuineMcCluskey(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> &cover,
+                    std::default_random_engine & rnd_eng,
                     double *prime_time, double *cover_time, bool tabular){
 
     //Prime implicants computation
     clock_t initemps=clock();
 
-    set<Implicant> prime;
-    if(tabular){
-        tabularMethod(minterms,prime);
-    }
-    else{
-        list<Implicant> primelist;
-        iteratedConsensus(minterms,primelist);
-        prime.insert(primelist.begin(),primelist.end());
-    }
+    list<Implicant> prime;
+
+    if(tabular) tabularMethod(f,d,prime);
+    else iteratedConsensus(f,d,prime);
 
     *prime_time = (clock()-initemps)/(double)CLOCKS_PER_SEC;
 
@@ -197,37 +193,40 @@ void QuineMcCluskey(const list<Implicant> &minterms, list<Implicant> &result, st
 
     dynamic_bitset <>x(prime.size()); x.reset();
     dynamic_bitset <>b(prime.size()); b.set();
-    Matrix * m = new Matrix(minterms,prime);
+    Matrix * m = new Matrix(f,prime);
     dynamic_bitset <>minset = exactCover(m,x,b,rnd_eng);
     delete m;
 
     int i = 0;
     for(const Implicant &im : prime){
         if(minset[i])
-            result.push_back(im);
+            cover.push_back(im);
         i++;
     }
 
     *cover_time = (clock()-initemps)/(double)CLOCKS_PER_SEC;
 }
 
-void generateUniformRandom(int nvars, double q, default_random_engine &rnd_eng, list<Implicant> &minterms){
+void generateUniformRandom(int nvars, double fp, double dp, default_random_engine &rnd_eng, list<Implicant> &f, list<Implicant> &d){
     dynamic_bitset<> mask(nvars,(1<<nvars)-1);
     uniform_real_distribution<double> uir(0.0, 1.0);
     for(int i = 0; i < 1<<nvars; i++){
-        double p = uir(rnd_eng);
-        if(p <= q) minterms.push_back(Implicant(mask,dynamic_bitset<> (nvars,i)));
+        double q = uir(rnd_eng);
+        if(q < fp)
+            f.push_back(Implicant(mask,dynamic_bitset<> (nvars,i),true));
+        else if(q < fp + dp)
+            d.push_back(Implicant(mask,dynamic_bitset<> (nvars,i),false));
     }
 }
 
-void runIncProb(int nvars, int nreps, int seed, bool tabular){
+void runIncProb(int nvars, double dontcare, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
     double min_fraction = 0.05;
     double max_fraction = 1.01;
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
-    cout << "prob ; n minterms ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
+    cout << "prob ; n minterms f ; n minterms d ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
 
     for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
         double sum_prime_time = 0;
@@ -235,17 +234,19 @@ void runIncProb(int nvars, int nreps, int seed, bool tabular){
         double sum_sizes = 0;
 
         for(int rep = 0; rep < nreps; rep++){
-            list<Implicant> minterms;
-            list<Implicant> result;
-            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+            list<Implicant> f;
+            list<Implicant> d;
+            list<Implicant> cover;
+            generateUniformRandom(nvars,fraction,dontcare,rnd_eng,f,d);
 
-            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time, tabular);
+            QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, tabular);
             sum_prime_time += *prime_time;
             sum_cover_time += *cover_time;
-            sum_sizes += result.size();
+            sum_sizes += cover.size();
         }
         cout << fraction << " ; ";
         cout << (1<<nvars)*fraction << " ; ";
+        cout << (1<<nvars)*dontcare << " ; ";
         cout << sum_prime_time/nreps << " ; ";
         cout << sum_cover_time/nreps << " ; ";
         cout << sum_prime_time/nreps + sum_cover_time/nreps<< " ; ";
@@ -256,7 +257,7 @@ void runIncProb(int nvars, int nreps, int seed, bool tabular){
     delete cover_time;
 }
 
-void runIncVars(double fraction, int nreps, int seed, bool tabular){
+void runIncVars(double fraction, double dontcare, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
 
     int min_nvars = 4;
@@ -264,7 +265,7 @@ void runIncVars(double fraction, int nreps, int seed, bool tabular){
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
-    cout << "nvars ; n minterms ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
+    cout << "nvars ; n minterms f ; n minterms d ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
 
     for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
         double sum_prime_time = 0;
@@ -272,17 +273,19 @@ void runIncVars(double fraction, int nreps, int seed, bool tabular){
         double sum_sizes = 0;
 
         for(int rep = 0; rep < nreps; rep++){
-            list<Implicant> minterms;
-            list<Implicant> result;
-            generateUniformRandom(nvars,fraction,rnd_eng,minterms);
+            list<Implicant> f;
+            list<Implicant> d;
+            list<Implicant> cover;
+            generateUniformRandom(nvars,fraction,dontcare,rnd_eng,f,d);
 
-            QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time, tabular);
+            QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, tabular);
             sum_prime_time += *prime_time;
             sum_cover_time += *cover_time;
-            sum_sizes += result.size();
+            sum_sizes += cover.size();
         }
         cout << nvars << " ; ";
         cout << (1<<nvars)*fraction << " ; ";
+        cout << (1<<nvars)*dontcare << " ; ";
         cout << sum_prime_time/nreps << " ; ";
         cout << sum_cover_time/nreps << " ; ";
         cout << sum_prime_time/nreps + sum_cover_time/nreps<< " ; ";
@@ -293,7 +296,7 @@ void runIncVars(double fraction, int nreps, int seed, bool tabular){
     delete cover_time;
 }
 
-void runSingle(int nvars, double fraction, int nreps, int seed, bool tabular){
+void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
 
     double *prime_time = new double(0);
@@ -303,16 +306,17 @@ void runSingle(int nvars, double fraction, int nreps, int seed, bool tabular){
     double sum_cover_time = 0;
     double sum_sizes = 0;
     for(int rep = 0; rep < nreps; rep++){
-        list<Implicant> minterms;
-        list<Implicant> result;
-        generateUniformRandom(nvars,fraction,rnd_eng,minterms);
-        QuineMcCluskey(minterms,result,rnd_eng, prime_time, cover_time, tabular);
+        list<Implicant> f;
+        list<Implicant> d;
+        list<Implicant> cover;
+        generateUniformRandom(nvars,fraction,dontcare,rnd_eng,f,d);
+        QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, tabular);
         sum_prime_time += *prime_time;
         sum_cover_time += *cover_time;
-        sum_sizes += result.size();
-        testResult(minterms,list<Implicant>(),result);
+        sum_sizes += cover.size();
     }
-    cout << "N minterms = " << (1<<nvars)*fraction << endl;
+    cout << "N minterms in f = " << (1<<nvars)*fraction << endl;
+    cout << "N minterms in d = " << (1<<nvars)*dontcare << endl;
     cout << "Primes computation time = " << sum_prime_time/nreps << endl;
     cout << "Min cover computation time = " << sum_cover_time/nreps << endl;
     cout << "Total computation time = " << sum_prime_time/nreps + sum_cover_time/nreps << endl;
@@ -323,7 +327,7 @@ void runSingle(int nvars, double fraction, int nreps, int seed, bool tabular){
 }
 
 
-void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> cover){
+void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> &cover){
     set<Implicant> fset; fset.insert(f.begin(),f.end());
     set<Implicant> dset; dset.insert(d.begin(),d.end());
 
@@ -359,21 +363,21 @@ void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<
     cout << "Only the function and don't care set are covered: " << (onlyNeededCovered ? "yes" : "no") << endl;
 }
 
-void testTabularVsIterated(int nvars, double prob,int seed){
+void testTabularVsIterated(int nvars, double prob, int seed){
 
-    list<Implicant> minterms;
+    list<Implicant> f,d;
     std::default_random_engine rnd_eng(seed);
-    generateUniformRandom(nvars,prob,rnd_eng,minterms);
+    generateUniformRandom(nvars,prob,0,rnd_eng,f,d);
 
-    set<Implicant> primesTabular;
-    tabularMethod(minterms,primesTabular);
+    list<Implicant> primesTabular;
+    tabularMethod(f,d,primesTabular);
     cout << "With tabular method: " << primesTabular.size() << " prime implicants" << endl;
     for(const Implicant & im : primesTabular)
         cout << im << endl;
     cout << endl;
 
     list<Implicant> primesConsensus;
-    iteratedConsensus(minterms,primesConsensus);
+    iteratedConsensus(f,d,primesConsensus);
     primesConsensus.sort();
     cout << "With iterated consensus: " << primesConsensus.size() << " prime implicants" << endl;
     for(const Implicant & im : primesConsensus)
@@ -384,6 +388,7 @@ void testTabularVsIterated(int nvars, double prob,int seed){
 int main (int argc, char ** argv) {
     int n;
     double p;
+    double d = 0;
     int seed = 0;
     int r = 1;
     string a = "tabular";
@@ -397,7 +402,8 @@ int main (int argc, char ** argv) {
         ("help,h", "produce help message")
         ("seed,s",po::value<int>(), "seed of the random generator. DEFAULT 0")
         ("numvar,n", po::value<int>(), "number of variables of the minterms. Required in: single, incprob")
-        ("prob,p", po::value<double>(), "probability for a minterm of being in the formula. Required in: single, incvars")
+        ("prob,p", po::value<double>(), "proportion of the minterms in the formula. Required in: single, incvars")
+        ("dontcare,d", po::value<double>(), "proportion of the minterms in the don't care set. DEFAULT 0")
         ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1. Used in: single, nincvars, nincprob")
         ("primealg,a", po::value<string>(), "algorithm for computing prime implicants"
          "\ntabular: tabular method. DEFAULT"
@@ -408,9 +414,9 @@ int main (int argc, char ** argv) {
          "\nmax: column with maximum number of 1s"
          "\nmin: column with minimum number of 1s")
         ("execution,e", po::value<string>(), "type of execution"
-         "\nsingle: average of 'r' executions for defined 'n' and 'p'. DEFAULT"
-         "\nincvars: average of 'r' repetitions for defined 'p', and 'n'' from 5 to 12"
-         "\nincprob: average of 5 repetitions for defined 'n', and 'p'' from 0.05 to 1 step 0.05")
+         "\nsingle: average of 'r' executions for defined 'n','p' and 'd'. DEFAULT"
+         "\nincvars: average of 'r' repetitions for defined 'p' and 'd', and 'n' from 5 to 12"
+         "\nincprob: average of 5 repetitions for defined 'n' and 'd', and 'p' from 0.05 to 1 step 0.05")
     ;
 
     po::variables_map vm;
@@ -425,6 +431,7 @@ int main (int argc, char ** argv) {
     if(vm.count("seed")) seed = vm["seed"].as<int>();
     if(vm.count("numvar")) n = vm["numvar"].as<int>();
     if(vm.count("prob")) p = vm["prob"].as<double>();
+    if(vm.count("dontcare,d")) d = vm["dontcare"].as<double>();
     if(vm.count("reps")) r = vm["reps"].as<int>();
     if(vm.count("primealg")) a = vm["primealg"].as<string>();
     if(vm.count("branch")) b = vm["branch"].as<string>();
@@ -436,11 +443,11 @@ int main (int argc, char ** argv) {
     else Matrix::colSelectCriteria = Matrix::FIRST;
 
     if(e == "incprob")
-        runIncProb(n,r,seed,a == "iterated" ? false : true);
+        runIncProb(n,d,r,seed,a == "iterated" ? false : true);
     else if(e == "incvars")
-        runIncVars(p,r,seed,a == "iterated" ? false : true);
+        runIncVars(p,d,r,seed,a == "iterated" ? false : true);
     else
-        runSingle(n,p,r,seed,a == "iterated" ? false : true);
+        runSingle(n,p,d,r,seed,a == "iterated" ? false : true);
 
     return 0;
 }

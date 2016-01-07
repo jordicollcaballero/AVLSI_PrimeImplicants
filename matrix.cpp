@@ -22,20 +22,20 @@ Matrix::Matrix(bool **vals, int nRow, int nCol)
     nRemovedColumns = 0;
 }
 
-Matrix::Matrix(const list<Implicant> &minterms, const set<Implicant> &implicants)
+Matrix::Matrix(const list<Implicant> &f, const list<Implicant> &primes)
 {
-    nRows = minterms.size();
-    nColumns = implicants.size();
+    nRows = f.size();
+    nColumns = primes.size();
     idx = new int[nColumns];
     matrix = new vector<bool> *[nRows];
     for(int j = 0; j < nColumns; j++)
         this->idx[j] = j;
 
     int i = 0;
-    for(const Implicant &minterm : minterms){
+    for(const Implicant &minterm : f){
         int j = 0;
         matrix[i] = new vector<bool>(nColumns);
-        for(const Implicant &implicant : implicants){
+        for(const Implicant &implicant : primes){
             mat(i,j) = implicant.covers(minterm);
             j++;
         }
