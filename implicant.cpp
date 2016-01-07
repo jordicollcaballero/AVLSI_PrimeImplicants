@@ -81,6 +81,8 @@ ostream& operator<<(ostream& os, const Implicant& imp)
         else
             os << 'x';
     }
+    if(imp.dontcare)
+        os << 'd';
     return os;
 }
 

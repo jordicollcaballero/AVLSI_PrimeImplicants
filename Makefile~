@@ -1,7 +1,6 @@
 CXX=g++
 RM=rm -f
-CPPFLAGS=-std=c++11
-#CPPFLAGS=-O3 -std=c++11
+CPPFLAGS=-O3 -std=c++11
 #LDFLAGS=-g
 LDLIBS=-lboost_program_options 
 
@@ -11,8 +10,6 @@ OBJS=$(subst .cpp,.o,$(SRCS))
 all: run
 
 run: $(OBJS)
-	clear
-	clear 
 	$(CXX) $(LDFLAGS) -o run $(OBJS) $(LDLIBS) 
 
 clean:

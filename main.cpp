@@ -213,9 +213,9 @@ void generateUniformRandom(int nvars, double fp, double dp, default_random_engin
     for(int i = 0; i < 1<<nvars; i++){
         double q = uir(rnd_eng);
         if(q < fp)
-            f.push_back(Implicant(mask,dynamic_bitset<> (nvars,i),true));
+            f.push_back(Implicant(mask,dynamic_bitset<> (nvars,i),false));
         else if(q < fp + dp)
-            d.push_back(Implicant(mask,dynamic_bitset<> (nvars,i),false));
+            d.push_back(Implicant(mask,dynamic_bitset<> (nvars,i),true));
     }
 }
 
@@ -363,11 +363,11 @@ void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<
     cout << "Only the function and don't care set are covered: " << (onlyNeededCovered ? "yes" : "no") << endl;
 }
 
-void testTabularVsIterated(int nvars, double prob, int seed){
+void testTabularVsIterated(int nvars, double prob, double dontcare, int seed){
 
     list<Implicant> f,d;
     std::default_random_engine rnd_eng(seed);
-    generateUniformRandom(nvars,prob,0,rnd_eng,f,d);
+    generateUniformRandom(nvars,prob,dontcare,rnd_eng,f,d);
 
     list<Implicant> primesTabular;
     tabularMethod(f,d,primesTabular);
@@ -386,6 +386,7 @@ void testTabularVsIterated(int nvars, double prob, int seed){
 }
 
 int main (int argc, char ** argv) {
+
     int n;
     double p;
     double d = 0;
@@ -403,12 +404,12 @@ int main (int argc, char ** argv) {
         ("seed,s",po::value<int>(), "seed of the random generator. DEFAULT 0")
         ("numvar,n", po::value<int>(), "number of variables of the minterms. Required in: single, incprob")
         ("prob,p", po::value<double>(), "proportion of the minterms in the formula. Required in: single, incvars")
-        ("dontcare,d", po::value<double>(), "proportion of the minterms in the don't care set. DEFAULT 0")
-        ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1. Used in: single, nincvars, nincprob")
+        ("dontcare,d", po::value<double>(), "proportion of the minterms in the don't care set. DEFAULT 0. Used in: single, incvars, incprob.")
+        ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1. Used in: single, incvars, incprob")
         ("primealg,a", po::value<string>(), "algorithm for computing prime implicants"
          "\ntabular: tabular method. DEFAULT"
          "\niterated: iterated consensus")
-        ("branch,b", po::value<string>(), "selection strategy of the branching column. Used in: single, nincvars, nincprob."
+        ("branch,b", po::value<string>(), "selection strategy of the branching column. Used in: single, incvars, incprob."
          "\nfirst: first column. DEFAULT"
          "\nrandom: random column"
          "\nmax: column with maximum number of 1s"
@@ -431,7 +432,7 @@ int main (int argc, char ** argv) {
     if(vm.count("seed")) seed = vm["seed"].as<int>();
     if(vm.count("numvar")) n = vm["numvar"].as<int>();
     if(vm.count("prob")) p = vm["prob"].as<double>();
-    if(vm.count("dontcare,d")) d = vm["dontcare"].as<double>();
+    if(vm.count("dontcare")) d = vm["dontcare"].as<double>();
     if(vm.count("reps")) r = vm["reps"].as<int>();
     if(vm.count("primealg")) a = vm["primealg"].as<string>();
     if(vm.count("branch")) b = vm["branch"].as<string>();
