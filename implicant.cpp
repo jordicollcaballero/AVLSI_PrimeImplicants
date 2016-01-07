@@ -1,4 +1,7 @@
 #include "implicant.h"
+#include <cstdlib>
+#include <iostream>
+
 
 Implicant::Implicant()
 {
@@ -104,8 +107,8 @@ Implicant Implicant::consensus(const Implicant &i1, const Implicant &i2){
     int distance = uncommonVariables.count();
     if(distance==1){
         int uncommonVar = uncommonVariables.find_first();
-        i.mask = i1.mask | i2.mask;
-        i.variables = i1.variables | i2.variables;
+        i.mask = i1.mask|i2.mask;
+        i.variables = i1.variables|i2.variables;
         i.mask[uncommonVar]=false;
         i.variables[uncommonVar]=false;
         i.valid = true;
@@ -118,12 +121,11 @@ Implicant Implicant::consensus(const Implicant &i1, const Implicant &i2){
 
 Implicant Implicant::trueImplicant(int nVars)
 {
-    Implicant i;
-    i.valid = true;
-    i.mask = dynamic_bitset<>(nVars);
-    i.variables = dynamic_bitset<>(nVars);
-    i.mask.reset();
-    i.variables.reset();
+    dynamic_bitset<> mask(nVars);
+    dynamic_bitset<> variables(nVars);
+    mask.reset();
+    variables.reset();
+    Implicant i(mask,variables);
     return i;
 }
 

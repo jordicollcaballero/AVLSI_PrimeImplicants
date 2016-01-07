@@ -30,6 +30,12 @@ void printTable(set<Implicant> ** table, int nVars){
     }
 }
 
+void printList(const list<Implicant> & primes){
+    for(const Implicant & im : primes)
+        cout << im << endl;
+    cout << endl;
+}
+
 void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
     if(minterms.size() == 0)
         return;
@@ -66,47 +72,64 @@ void tabularMethod(const list<Implicant>& minterms, set<Implicant> &implicants){
 }
 
 
-list<Implicant> iteratedConsensus(const list<Implicant> implicants){
-    list<Implicant> prime = implicants;
+void iteratedConsensus(const list<Implicant> implicants, list<Implicant> & prime){
+    if(implicants.empty())
+        return;
+
+    prime = implicants;
     list<Implicant>::iterator it1 = prime.begin();
     it1++;
     while(it1!=prime.end()){
         list<Implicant>::iterator it2 = prime.begin();
         while(it2!=it1){
             if((*it1).covers(*it2)){
-                prime.erase(it2++);
+                it2 = prime.erase(it2);
             }
             else if((*it2).covers(*it1)){
-                prime.erase(it1++);
+                it1 = prime.erase(it1);
                 break;
             }
+            else it2++;
         }
         if(it1==it2) it1++;
     }
+
     it1 = prime.begin();
     it1++;
     while(it1!=prime.end()){
+        Implicant imp1 = *it1;
+        bool it1displaced = false;
         list<Implicant>::iterator it2 = prime.begin();
-        const Implicant & imp1 = *it1;
         while(it2!=it1){
-            const Implicant & imp2 = *it2;
+            Implicant imp2 = *it2;
             Implicant consensus = Implicant::consensus(imp1,imp2);
+            bool toAdd = true;
+            bool it1deleted = false;
             if(consensus.isValid()){
                 list<Implicant>::iterator it3 = prime.begin();
+
                 while(it3 != prime.end()){
-                    if(consensus.covers(*it3)){
-                        if(it3 == it1) it1--;
+                    if((*it3).covers(consensus)){
+                        toAdd = false;
+                        break;
+                    }
+                    else if(consensus.covers(*it3)){
+                        if(it3 == it1){
+                            it1--;
+                            it1deleted = true;
+                            it1displaced = true;
+                        }
                         if(it3 == it2) it2--;
                         it3 = prime.erase(it3);
                     }
-                    else
-                        it3++;
+                    else it3++;
                 }
-                prime.push_back(consensus);
+                if(toAdd) prime.push_back(consensus);
             }
+            if(it1deleted) it1++;
             it2++;
         }
-        it1++;
+        if(!it1displaced)it1++;
     }
 }
 
@@ -294,7 +317,86 @@ void runSingle(int nvars, double fraction, int nreps, int seed){
     delete cover_time;
 }
 
+void testTabularVsIterated(int nvars, int prob,int seed){
+
+        /*ifstream input;
+        string instance("instances/test.txt");
+
+        input.open(instance);
+
+        string word;
+
+        list<Implicant> minterms;
+        while(input >> word)
+            minterms.push_back(Implicant(word));
+
+        input.close();*/
+
+        list<Implicant> minterms;
+        std::default_random_engine rnd_eng(seed);
+        generateUniformRandom(nvars,prob,rnd_eng,minterms);
+
+        set<Implicant> primesTabular;
+        tabularMethod(minterms,primesTabular);
+        cout << "With tabular method: " << primesTabular.size() << " prime implicants" << endl;
+        for(const Implicant & im : primesTabular)
+            cout << im << endl;
+        cout << endl;
+
+        list<Implicant> primesConsensus;
+        iteratedConsensus(minterms,primesConsensus);
+        primesConsensus.sort();
+        cout << "With iterated consensus: " << primesConsensus.size() << " prime implicants" << endl;
+        for(const Implicant & im : primesConsensus)
+            cout << im << endl;
+        cout << endl;
+
+     /*   ofstream output;
+        output.open(instance + ".res");
+        for(const Implicant & im : result)
+            output << im << endl;
+        output.close();
+    */
+
+        /*input.open("instances/testmatriu.txt");
+
+        int nRow, nCol, val;
+        input >> nRow >> nCol;
+
+        bool ** mat = new bool *[nRow];
+        for(int i = 0; i < nRow; i++){
+            mat[i] = new bool[nCol];
+            for(int j = 0; j < nCol; j++){
+                input >> val;
+                mat[i][j] = val ? true : false;
+            }
+        }
+
+
+        Matrix m(mat,nRow,nCol);
+        m.saveState();
+        m.print();
+        dynamic_bitset <>x(nCol); x.reset();
+        //m.reduce(x);
+        m.removeColumnAndRows(9);
+        m.print();
+        //cout << endl << endl << x << endl;
+        m.restoreState();
+        m.print();*/
+    /*
+        std::default_random_engine rnd_eng(1234);
+        double fraction = 0.3;
+        int nvars = 10;
+        int nminterms = (int)((1<<nvars)*fraction);
+
+        generateBinomialRandom(nvars,fraction,rnd_eng);
+        */
+}
+
 int main (int argc, char ** argv) {
+
+    auxMain();
+    return 0;
 
     int n;
     double p;
@@ -309,10 +411,10 @@ int main (int argc, char ** argv) {
     desc.add_options()
         ("help,h", "produce help message")
         ("seed,s",po::value<int>(), "seed of the random generator. DEFAULT 0")
-        ("numvar,n", po::value<int>(), "number of variables of the minterms (only for 'single' and 'incprob')")
-        ("prob,p", po::value<double>(), "probability for a minterm of being in the formula (only for 'single' and 'incvars')")
-        ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1")
-        ("branch,b", po::value<string>(), "selection strategy of the branching column"
+        ("numvar,n", po::value<int>(), "number of variables of the minterms. Required in: single, incprob")
+        ("prob,p", po::value<double>(), "probability for a minterm of being in the formula. Required in: single, incvars")
+        ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1. Used in: single, nincvars, nincprob")
+        ("branch,b", po::value<string>(), "selection strategy of the branching column. Used in: single, nincvars, nincprob."
          "\nfirst: first column. DEFAULT"
          "\nrandom: random column"
          "\nmax: column with maximum number of 1s"
@@ -344,7 +446,6 @@ int main (int argc, char ** argv) {
     else if(b=="min") Matrix::colSelectCriteria = Matrix::MIN_ONES;
     else Matrix::colSelectCriteria = Matrix::FIRST;
 
-    //Check errors
     if(e == "incprob")
         runIncProb(n,r,seed);
     else if(e == "incvars")
@@ -352,63 +453,6 @@ int main (int argc, char ** argv) {
     else
         runSingle(n,p,r,seed);
 
-/*
-    ifstream input;
-    string instance("instances/test.txt");
-
-    input.open(instance);
-
-    string word;
-
-    list<Implicant> minterms;
-    while(input >> word)
-        minterms.push_back(Implicant(word));
-
-    input.close();
-
-    list<Implicant> result;
-    //QuineMcCluskey(minterms,result);
-
-    ofstream output;
-    output.open(instance + ".res");
-    for(const Implicant & im : result)
-        output << im << endl;
-    output.close();
-*/
-
-    /*input.open("instances/testmatriu.txt");
-
-    int nRow, nCol, val;
-    input >> nRow >> nCol;
-
-    bool ** mat = new bool *[nRow];
-    for(int i = 0; i < nRow; i++){
-        mat[i] = new bool[nCol];
-        for(int j = 0; j < nCol; j++){
-            input >> val;
-            mat[i][j] = val ? true : false;
-        }
-    }
-
-
-    Matrix m(mat,nRow,nCol);
-    m.saveState();
-    m.print();
-    dynamic_bitset <>x(nCol); x.reset();
-    //m.reduce(x);
-    m.removeColumnAndRows(9);
-    m.print();
-    //cout << endl << endl << x << endl;
-    m.restoreState();
-    m.print();*/
-/*
-    std::default_random_engine rnd_eng(1234);
-    double fraction = 0.3;
-    int nvars = 10;
-    int nminterms = (int)((1<<nvars)*fraction);
-
-    generateBinomialRandom(nvars,fraction,rnd_eng);
-    */
     return 0;
 }
 
