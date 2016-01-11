@@ -17,6 +17,7 @@ namespace po = boost::program_options;
 
 void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> &cover);
 
+//Auxiliar method used in developing and testing. Prints the table in tabular method.
 void printTable(set<Implicant> ** table, int nVars){
     for(int col = 0; col <= nVars; col++){
         cout << "n var in literal = " << nVars-col << endl;
@@ -32,17 +33,26 @@ void printTable(set<Implicant> ** table, int nVars){
     }
 }
 
+//Auxiliar method used in developing and testing. Prints the temporal list of prime implicants in the iterated consensus
 void printList(const list<Implicant> & primes){
     for(const Implicant & im : primes)
         cout << im << endl;
     cout << endl;
 }
 
+/*
+ * Tabular method to compute the prime implicants of a function
+ * f: function (list of minterms)
+ * d: don't care set (list of minterms)
+ * primes: out param. List of prime implicants
+ */
 void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Implicant> &primes){
     if(f.size() == 0)
         return;
     set<Implicant> implicantset;
     int nVars = f.front().getNVars();
+
+    //Construct the distance-1 table
     set<Implicant> ** table = new set<Implicant> * [nVars+1];
     for(int i = 0; i <= nVars; i++)
         table[i] = new set<Implicant> [nVars-i+1];
@@ -53,6 +63,7 @@ void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Impli
     for(const Implicant& im : d)
         table[0][im.countNegatedVars()].insert(im);
 
+    //Make distance 1 mergings
     for(int col = 0; col < nVars; col++){
         for(int row = 0; row < nVars-col; row++){
             for(const Implicant &im1 : table[col][row+1]){
@@ -69,6 +80,7 @@ void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Impli
         }
     }
 
+    //Put the solution in the return
     primes.insert(primes.end(),implicantset.begin(),implicantset.end());
 
     for(int i = 0; i <= nVars; i++)
@@ -77,12 +89,21 @@ void tabularMethod(const list<Implicant>& f, const list<Implicant>& d,list<Impli
 }
 
 
+/*
+ * Iterated consensus to compute the prime implicants of a function
+ * f: function (list of implicants)
+ * d: don't care set (list of implicants)
+ * primes: out param. List of prime implicants.
+ */
 void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> & primes){
     if(f.empty())
         return;
 
+    //Insert f and d in the list
     primes = f;
     primes.insert(primes.end(),d.begin(),d.end());
+
+    //Ensure that there aren't implicants in the list covered by other implicants in the list
     list<Implicant>::iterator it1 = primes.begin();
     it1++;
     while(it1!=primes.end()){
@@ -100,6 +121,7 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
         if(it1==it2) it1++;
     }
 
+    //Iterate over all pairs and make the consensus
     it1 = primes.begin();
     it1++;
     while(it1!=primes.end()){
@@ -111,9 +133,10 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
             Implicant consensus = Implicant::consensus(imp1,imp2);
             bool toAdd = true;
             bool it1deleted = false;
-            if(consensus.isValid()){
+            if(consensus.isValid()){ //If exists consensus
                 list<Implicant>::iterator it3 = primes.begin();
 
+                //Ensure that the consensus is not covered, and erase the implicants covered by the consensus
                 while(it3 != primes.end()){
                     if((*it3).covers(consensus)){
                         toAdd = false;
@@ -130,6 +153,7 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
                     }
                     else it3++;
                 }
+                //If the consensus is not covered, add it.
                 if(toAdd) primes.push_back(consensus);
             }
             if(it1deleted) it1++;
@@ -138,6 +162,8 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
         if(!it1displaced)it1++;
     }
 
+    //Detect don't care implicants. Contrarilly to the tabular method, there are many consensus that give a same implicant.
+        //Thus, it is not ensured that all the don't care implicants will be detected and deleted
     it1 = primes.begin();
     while(it1!=primes.end()){
         if((*it1).isDontCare())
@@ -150,6 +176,7 @@ void iteratedConsensus(const list<Implicant> &f, const list<Implicant> &d, list<
  * A: matrix of covering of implicants on minterms
  * x: partial solution
  * b: best solution found until the moment
+ * rnd_eng: random engine used for random operations
  */
 dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b, std::default_random_engine & rnd_eng){
     int c;
@@ -174,6 +201,15 @@ dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b, s
     return b;
 }
 
+/*
+ * Quine McCluskey method.
+ * f: function
+ * d: don't care set
+ * cover: out param with the solution
+ * rnd_eng: random engine used for random operations
+ * prime_time, cover_time, nprime: out params to get statistics
+ * tabular: Method to find the prime implicants. true -> tabular method. false -> iterated consensus.
+ */
 void QuineMcCluskey(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> &cover,
                     std::default_random_engine & rnd_eng,
                     double *prime_time, double *cover_time, int *nprime, bool tabular){
@@ -208,6 +244,15 @@ void QuineMcCluskey(const list<Implicant> &f, const list<Implicant> &d, list<Imp
     *cover_time = (clock()-initemps)/(double)CLOCKS_PER_SEC;
 }
 
+/*
+ * Generate a random function
+ * nvars: number of variables of the function
+ * fp: ratio of minterms that are in the function
+ * dp: ratio of minterms that are in the don't care set
+ * rnd_eng: random engine used for random operations
+ * f: out param. function
+ * d: out param. don't care set
+ */
 void generateUniformRandom(int nvars, double fp, double dp, default_random_engine &rnd_eng, list<Implicant> &f, list<Implicant> &d){
     dynamic_bitset<> mask(nvars,(1<<nvars)-1);
     uniform_real_distribution<double> uir(0.0, 1.0);
@@ -220,6 +265,14 @@ void generateUniformRandom(int nvars, double fp, double dp, default_random_engin
     }
 }
 
+/*
+ * Experiment with increasing ratio of minterms in the function for a fixed number of vars
+ * nvars: number of variables of the function
+ * dontcare: ratio of minterms that are in the don't care set
+ * nreps: number of repetitions of each experiment
+ * seed: seed for the random generator
+ * tabular: Method to find the prime implicants. true -> tabular method. false -> iterated consensus.
+ */
 void runIncProb(int nvars, double dontcare, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
     double min_fraction = 0.05;
@@ -262,6 +315,14 @@ void runIncProb(int nvars, double dontcare, int nreps, int seed, bool tabular){
     delete cover_time;
 }
 
+/*
+ * Experiment with increasing number of variables for a fixed ratio of minterms in the function
+ * fraction: ratio of minterms that are in the function
+ * dontcare: ratio of minterms that are in the don't care set
+ * nreps: number of repetitions of each experiment
+ * seed: seed for the random generator
+ * tabular: Method to find the prime implicants. true -> tabular method. false -> iterated consensus.
+ */
 void runIncVars(double fraction, double dontcare, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
 
@@ -305,6 +366,15 @@ void runIncVars(double fraction, double dontcare, int nreps, int seed, bool tabu
     delete cover_time;
 }
 
+/*
+ * Experiment with fixed number of variables and fixed ratio of minterms in the function
+ * nvars: number of variables of the function
+ * fraction: ratio of minterms that are in the function
+ * dontcare: ratio of minterms that are in the don't care set
+ * nreps: number of repetitions of each experiment
+ * seed: seed for the random generator
+ * tabular: Method to find the prime implicants. true -> tabular method. false -> iterated consensus.
+ */
 void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed, bool tabular){
     std::default_random_engine rnd_eng(seed);
 
@@ -339,7 +409,7 @@ void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed,
     delete cover_time;
 }
 
-
+//Auxiliar method used in developing and testing. Checks the validity of the solutions.
 void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<Implicant> &cover){
     set<Implicant> fset; fset.insert(f.begin(),f.end());
     set<Implicant> dset; dset.insert(d.begin(),d.end());
@@ -376,6 +446,10 @@ void testResult(const list<Implicant> & f, const list<Implicant>& d, const list<
     cout << "Only the function and don't care set are covered: " << (onlyNeededCovered ? "yes" : "no") << endl;
 }
 
+//Auxiliar method used in developing and testing. Checks the results of tabular method and iterated consensus.
+//The result should be the same if there isn't don't care set
+//If there is don't care set, the iterated consensus should give all the prime implicants that gives the tabular method,
+    //and could also give prime implicants that only cover members of the don't care set
 void testTabularVsIterated(int nvars, double prob, double dontcare, int seed){
 
     list<Implicant> f,d;
@@ -398,6 +472,7 @@ void testTabularVsIterated(int nvars, double prob, double dontcare, int seed){
     cout << endl;
 }
 
+//Main methods. Arguments can be checked with '-h' / '--help'
 int main (int argc, char ** argv) {
 
     int n;
