@@ -176,7 +176,7 @@ dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b, s
 
 void QuineMcCluskey(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> &cover,
                     std::default_random_engine & rnd_eng,
-                    double *prime_time, double *cover_time, bool tabular){
+                    double *prime_time, double *cover_time, int *nprime, bool tabular){
 
     //Prime implicants computation
     clock_t initemps=clock();
@@ -187,6 +187,7 @@ void QuineMcCluskey(const list<Implicant> &f, const list<Implicant> &d, list<Imp
     else iteratedConsensus(f,d,prime);
 
     *prime_time = (clock()-initemps)/(double)CLOCKS_PER_SEC;
+    *nprime = prime.size();
 
     //Minimum cover computation
     initemps=clock();
@@ -226,11 +227,13 @@ void runIncProb(int nvars, double dontcare, int nreps, int seed, bool tabular){
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
-    cout << "prob ; n minterms f ; n minterms d ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
+    int *nprimes = new int(0);
+    cout << "prob ; n minterms f ; n minterms d ; prime comp. time ; min cover comp. time ; total time ; n primes; sol size" << endl;
 
     for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
         double sum_prime_time = 0;
         double sum_cover_time = 0;
+        int sum_primes = 0;
         double sum_sizes = 0;
 
         for(int rep = 0; rep < nreps; rep++){
@@ -239,9 +242,10 @@ void runIncProb(int nvars, double dontcare, int nreps, int seed, bool tabular){
             list<Implicant> cover;
             generateUniformRandom(nvars,fraction,dontcare,rnd_eng,f,d);
 
-            QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, tabular);
+            QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, nprimes, tabular);
             sum_prime_time += *prime_time;
             sum_cover_time += *cover_time;
+            sum_primes += *nprimes;
             sum_sizes += cover.size();
         }
         cout << fraction << " ; ";
@@ -250,6 +254,7 @@ void runIncProb(int nvars, double dontcare, int nreps, int seed, bool tabular){
         cout << sum_prime_time/nreps << " ; ";
         cout << sum_cover_time/nreps << " ; ";
         cout << sum_prime_time/nreps + sum_cover_time/nreps<< " ; ";
+        cout << sum_primes/nreps << " ; ";
         cout << sum_sizes / nreps << endl;
     }
 
@@ -265,11 +270,13 @@ void runIncVars(double fraction, double dontcare, int nreps, int seed, bool tabu
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
-    cout << "nvars ; n minterms f ; n minterms d ; prime comp. time ; min cover comp. time ; total time ; sol. size" << endl << endl;
+    int *nprimes = new int(0);
+    cout << "nvars ; n minterms f ; n minterms d ; prime comp time ; min cover comp time ; total time ; n primes; sol size" << endl;
 
     for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
         double sum_prime_time = 0;
         double sum_cover_time = 0;
+        int sum_primes = 0;
         double sum_sizes = 0;
 
         for(int rep = 0; rep < nreps; rep++){
@@ -278,9 +285,10 @@ void runIncVars(double fraction, double dontcare, int nreps, int seed, bool tabu
             list<Implicant> cover;
             generateUniformRandom(nvars,fraction,dontcare,rnd_eng,f,d);
 
-            QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, tabular);
+            QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, nprimes, tabular);
             sum_prime_time += *prime_time;
             sum_cover_time += *cover_time;
+            sum_primes += *nprimes;
             sum_sizes += cover.size();
         }
         cout << nvars << " ; ";
@@ -289,6 +297,7 @@ void runIncVars(double fraction, double dontcare, int nreps, int seed, bool tabu
         cout << sum_prime_time/nreps << " ; ";
         cout << sum_cover_time/nreps << " ; ";
         cout << sum_prime_time/nreps + sum_cover_time/nreps<< " ; ";
+        cout << sum_primes/nreps << " ; ";
         cout << sum_sizes / nreps << endl;
     }
 
@@ -301,18 +310,21 @@ void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed,
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
+    int *nprimes = new int(0);
 
     double sum_prime_time = 0;
     double sum_cover_time = 0;
+    int sum_primes = 0;
     double sum_sizes = 0;
     for(int rep = 0; rep < nreps; rep++){
         list<Implicant> f;
         list<Implicant> d;
         list<Implicant> cover;
         generateUniformRandom(nvars,fraction,dontcare,rnd_eng,f,d);
-        QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, tabular);
+        QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, nprimes, tabular);
         sum_prime_time += *prime_time;
         sum_cover_time += *cover_time;
+        sum_primes = *nprimes;
         sum_sizes += cover.size();
     }
     cout << "N minterms in f = " << (1<<nvars)*fraction << endl;
@@ -320,6 +332,7 @@ void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed,
     cout << "Primes computation time = " << sum_prime_time/nreps << endl;
     cout << "Min cover computation time = " << sum_cover_time/nreps << endl;
     cout << "Total computation time = " << sum_prime_time/nreps + sum_cover_time/nreps << endl;
+    cout << "Number of prime implicants = " << sum_primes/nreps << endl;
     cout << "Min cover size = " << sum_sizes/nreps << endl;
 
     delete prime_time;
@@ -416,7 +429,7 @@ int main (int argc, char ** argv) {
          "\nmin: column with minimum number of 1s")
         ("execution,e", po::value<string>(), "type of execution"
          "\nsingle: average of 'r' executions for defined 'n','p' and 'd'. DEFAULT"
-         "\nincvars: average of 'r' repetitions for defined 'p' and 'd', and 'n' from 5 to 12"
+         "\nincvars: average of 'r' repetitions for defined 'p' and 'd', and 'n' from 4 to 10"
          "\nincprob: average of 5 repetitions for defined 'n' and 'd', and 'p' from 0.05 to 1 step 0.05")
     ;
 

@@ -1,0 +1,15 @@
+#!/bin/bash
+OLD="."
+NEW=","
+DPATH="./*.csv"
+TFILE="/tmp/out.tmp.$$"
+
+for f in $DPATH
+do
+  if [ -f $f -a -r $f ]; then
+   sed "s/$OLD/$NEW/g" "$f" > $TFILE && mv $TFILE "$f"
+  else
+   echo "Error: Cannot read $f"
+  fi
+done
+/bin/rm $TFILE

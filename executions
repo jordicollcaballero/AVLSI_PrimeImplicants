@@ -1,0 +1,7 @@
+./run -e single -n 8 -p 0.3 -d 0.1 -r 5 -a iterated -b first -s 0
+./run -e single -n 8 -p 0.3 -d 0.1 -r 5 -a tabular -b first -s 0
+
+
+./run -e incvars -p 0.2 -d 0 -r 20 -a tabular -b first -s 0 >> incvars_02_0_tabular_first.csv
+
+
