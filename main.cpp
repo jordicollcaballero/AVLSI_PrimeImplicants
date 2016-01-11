@@ -212,7 +212,7 @@ dynamic_bitset<> exactCover(Matrix *A, dynamic_bitset<> x, dynamic_bitset<> b, s
  */
 void QuineMcCluskey(const list<Implicant> &f, const list<Implicant> &d, list<Implicant> &cover,
                     std::default_random_engine & rnd_eng,
-                    double *prime_time, double *cover_time, int *nprime, bool tabular){
+                    double *prime_time, double *cover_time, double *nprime, bool tabular){
 
     //Prime implicants computation
     clock_t initemps=clock();
@@ -280,13 +280,13 @@ void runIncProb(int nvars, double dontcare, int nreps, int seed, bool tabular){
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
-    int *nprimes = new int(0);
+    double *nprimes = new double(0);
     cout << "prob ; n minterms f ; n minterms d ; prime comp. time ; min cover comp. time ; total time ; n primes; sol size" << endl;
 
     for(double fraction = min_fraction; fraction <= max_fraction; fraction+=0.05){
         double sum_prime_time = 0;
         double sum_cover_time = 0;
-        int sum_primes = 0;
+        double sum_primes = 0;
         double sum_sizes = 0;
 
         for(int rep = 0; rep < nreps; rep++){
@@ -331,13 +331,13 @@ void runIncVars(double fraction, double dontcare, int nreps, int seed, bool tabu
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
-    int *nprimes = new int(0);
+    double *nprimes = new double(0);
     cout << "nvars ; n minterms f ; n minterms d ; prime comp time ; min cover comp time ; total time ; n primes; sol size" << endl;
 
     for(int nvars = min_nvars; nvars <= max_nvars; nvars++){
         double sum_prime_time = 0;
         double sum_cover_time = 0;
-        int sum_primes = 0;
+        double sum_primes = 0;
         double sum_sizes = 0;
 
         for(int rep = 0; rep < nreps; rep++){
@@ -380,11 +380,11 @@ void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed,
 
     double *prime_time = new double(0);
     double *cover_time = new double(0);
-    int *nprimes = new int(0);
+    double *nprimes = new double(0);
 
     double sum_prime_time = 0;
     double sum_cover_time = 0;
-    int sum_primes = 0;
+    double sum_primes = 0;
     double sum_sizes = 0;
     for(int rep = 0; rep < nreps; rep++){
         list<Implicant> f;
@@ -394,7 +394,7 @@ void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed,
         QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, nprimes, tabular);
         sum_prime_time += *prime_time;
         sum_cover_time += *cover_time;
-        sum_primes = *nprimes;
+        sum_primes += *nprimes;
         sum_sizes += cover.size();
     }
     cout << "N minterms in f = " << (1<<nvars)*fraction << endl;
@@ -407,6 +407,41 @@ void runSingle(int nvars, double fraction, double dontcare, int nreps, int seed,
 
     delete prime_time;
     delete cover_time;
+}
+
+/*
+ * Solve instance file 'file'
+ * file: instance to solve
+ * seed: seed for the random generator
+ * tabular: Method to find the prime implicants. true -> tabular method. false -> iterated consensus.
+ */
+void solveFile(string file, int seed, bool tabular){
+    ifstream input;
+    std::default_random_engine rnd_eng(seed);
+
+    input.open(file);
+    string word;
+
+    list<Implicant> f;
+    list<Implicant> d;
+
+    while(input >> word){
+        Implicant im(word);
+        if(im.isDontCare())
+            d.push_back(im);
+        else
+            f.push_back(im);
+    }
+    input.close();
+
+    double *prime_time = new double(0);
+    double *cover_time = new double(0);
+    double *nprimes = new double(0);
+    list<Implicant> cover;
+    QuineMcCluskey(f,d,cover,rnd_eng, prime_time, cover_time, nprimes, tabular);
+
+    for(const Implicant &imp : cover)
+        cout << imp << endl;
 }
 
 //Auxiliar method used in developing and testing. Checks the validity of the solutions.
@@ -482,7 +517,8 @@ int main (int argc, char ** argv) {
     int r = 1;
     string a = "tabular";
     string b = "first";
-    string e = "single";
+    string e = "";
+    string f = "";
 
     // Parse input arguments for options
     // http://www.boost.org/doc/libs/1_41_0/doc/html/program_options/tutorial.html
@@ -494,10 +530,11 @@ int main (int argc, char ** argv) {
         ("prob,p", po::value<double>(), "proportion of the minterms in the formula. Required in: single, incvars")
         ("dontcare,d", po::value<double>(), "proportion of the minterms in the don't care set. DEFAULT 0. Used in: single, incvars, incprob.")
         ("reps,r", po::value<int>(), "number of repetitions. DEFAULT 1. Used in: single, incvars, incprob")
+        ("file,f", po::value<string>(), "instance to solve. Required in: file")
         ("primealg,a", po::value<string>(), "algorithm for computing prime implicants"
          "\ntabular: tabular method. DEFAULT"
          "\niterated: iterated consensus")
-        ("branch,b", po::value<string>(), "selection strategy of the branching column. Used in: single, incvars, incprob."
+        ("branch,b", po::value<string>(), "selection strategy of the branching column. Used in: single, incvars, incprob, file."
          "\nfirst: first column. DEFAULT"
          "\nrandom: random column"
          "\nmax: column with maximum number of 1s"
@@ -505,7 +542,8 @@ int main (int argc, char ** argv) {
         ("execution,e", po::value<string>(), "type of execution"
          "\nsingle: average of 'r' executions for defined 'n','p' and 'd'. DEFAULT"
          "\nincvars: average of 'r' repetitions for defined 'p' and 'd', and 'n' from 4 to 10"
-         "\nincprob: average of 5 repetitions for defined 'n' and 'd', and 'p' from 0.05 to 1 step 0.05")
+         "\nincprob: average of 5 repetitions for defined 'n' and 'd', and 'p' from 0.05 to 1 step 0.05"
+         "\nfile: solve file 'f'")
     ;
 
     po::variables_map vm;
@@ -524,6 +562,7 @@ int main (int argc, char ** argv) {
     if(vm.count("reps")) r = vm["reps"].as<int>();
     if(vm.count("primealg")) a = vm["primealg"].as<string>();
     if(vm.count("branch")) b = vm["branch"].as<string>();
+    if(vm.count("file")) f = vm["file"].as<string>();
     if(vm.count("execution")) e = vm["execution"].as<string>();
 
     if(b == "random") Matrix::colSelectCriteria = Matrix::RANDOM;
@@ -535,62 +574,12 @@ int main (int argc, char ** argv) {
         runIncProb(n,d,r,seed,a == "iterated" ? false : true);
     else if(e == "incvars")
         runIncVars(p,d,r,seed,a == "iterated" ? false : true);
-    else
+    else if(e=="file")
+        solveFile(f,seed,a == "iterated" ? false : true);
+    else if(e=="single")
         runSingle(n,p,d,r,seed,a == "iterated" ? false : true);
+    else
+        cout << "Invalid execution type" << endl;
 
     return 0;
 }
-
-/*ifstream input;
-string instance("instances/test.txt");
-
-input.open(instance);
-
-string word;
-
-list<Implicant> minterms;
-while(input >> word)
-    minterms.push_back(Implicant(word));
-
-input.close();*/
-
-/*   ofstream output;
-   output.open(instance + ".res");
-   for(const Implicant & im : result)
-       output << im << endl;
-   output.close();
-*/
-
-   /*input.open("instances/testmatriu.txt");
-
-   int nRow, nCol, val;
-   input >> nRow >> nCol;
-
-   bool ** mat = new bool *[nRow];
-   for(int i = 0; i < nRow; i++){
-       mat[i] = new bool[nCol];
-       for(int j = 0; j < nCol; j++){
-           input >> val;
-           mat[i][j] = val ? true : false;
-       }
-   }
-
-
-   Matrix m(mat,nRow,nCol);
-   m.saveState();
-   m.print();
-   dynamic_bitset <>x(nCol); x.reset();
-   //m.reduce(x);
-   m.removeColumnAndRows(9);
-   m.print();
-   //cout << endl << endl << x << endl;
-   m.restoreState();
-   m.print();*/
-/*
-   std::default_random_engine rnd_eng(1234);
-   double fraction = 0.3;
-   int nvars = 10;
-   int nminterms = (int)((1<<nvars)*fraction);
-
-   generateBinomialRandom(nvars,fraction,rnd_eng);
-   */
